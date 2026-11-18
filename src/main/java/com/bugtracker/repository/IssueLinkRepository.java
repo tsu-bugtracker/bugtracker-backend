@@ -6,13 +6,14 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.UUID;
 
 @Repository
-public interface IssueLinkRepository extends JpaRepository<IssueLink, Long> {
+public interface IssueLinkRepository extends JpaRepository<IssueLink, UUID> {
 
-    List<IssueLink> findAllBySourceIssueId(Long sourceIssueId);
+    List<IssueLink> findAllBySourceIssueId(UUID sourceIssueId);
 
-    List<IssueLink> findAllByTargetIssueId(Long targetIssueId);
+    List<IssueLink> findAllByTargetIssueId(UUID targetIssueId);
 
-    boolean existsBySourceIssueIdAndTargetIssueIdAndLinkType(Long sourceIssueId, Long targetIssueId, LinkType linkType);
+    boolean existsBySourceIssueIdAndTargetIssueIdAndLinkType(UUID sourceIssueId, UUID targetIssueId, LinkType linkType);
 }

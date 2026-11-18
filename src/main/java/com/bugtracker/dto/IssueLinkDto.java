@@ -7,6 +7,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.UUID;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -14,8 +16,8 @@ import lombok.Setter;
 @Builder
 public class IssueLinkDto {
 
-    private Long id;
-    private Long sourceIssueId;
-    private Long targetIssueId;
+    private UUID id;
+    private UUID sourceIssueId;
+    private UUID targetIssueId;
     private LinkType linkType;
 }

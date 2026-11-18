@@ -6,15 +6,16 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.UUID;
 
 @Repository
-public interface IssueRepository extends JpaRepository<Issue, Long> {
+public interface IssueRepository extends JpaRepository<Issue, UUID> {
 
-    List<Issue> findAllByProjectId(Long projectId);
+    List<Issue> findAllByProjectId(UUID projectId);
 
-    List<Issue> findAllByProjectIdAndStatus(Long projectId, IssueStatus status);
+    List<Issue> findAllByProjectIdAndStatus(UUID projectId, IssueStatus status);
 
-    List<Issue> findAllByProjectIdAndAssigneeId(Long projectId, Long assigneeId);
+    List<Issue> findAllByProjectIdAndAssigneeId(UUID projectId, UUID assigneeId);
 
-    List<Issue> findAllByProjectIdAndReporterId(Long projectId, Long reporterId);
+    List<Issue> findAllByProjectIdAndReporterId(UUID projectId, UUID reporterId);
 }

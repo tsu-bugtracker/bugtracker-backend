@@ -8,6 +8,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.UUID;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,7 +20,7 @@ public class IssueCloseDto {
     @NotNull
     private IssueResolution resolution;
 
-    private Long fixReleaseId;
+    private UUID fixReleaseId;
 
     private String comment;
 }

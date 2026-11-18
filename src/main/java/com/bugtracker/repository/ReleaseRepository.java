@@ -6,13 +6,14 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface ReleaseRepository extends JpaRepository<Release, Long> {
+public interface ReleaseRepository extends JpaRepository<Release, UUID> {
 
-    List<Release> findAllByProjectId(Long projectId);
+    List<Release> findAllByProjectId(UUID projectId);
 
-    Optional<Release> findByProjectIdAndVersionName(Long projectId, String versionName);
+    Optional<Release> findByProjectIdAndVersionName(UUID projectId, String versionName);
 
-    boolean existsByProjectIdAndVersionName(Long projectId, String versionName);
+    boolean existsByProjectIdAndVersionName(UUID projectId, String versionName);
 }
