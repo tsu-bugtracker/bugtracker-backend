@@ -63,3 +63,15 @@ tasks.named('test') {
     useJUnitPlatform()
 }
 
+tasks.register('generateMigration', JavaExec) {
+    group = 'migration'
+    description = 'Generates Flyway migration SQL script from JPA entities'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.bugtracker.util.SchemaExporter'
+    args = project.hasProperty('targetFile') ? [project.property('targetFile')] : ['src/main/resources/db/migration/V1__init.sql']
+}
+
+tasks.named('bootJar') {
+    exclude('com/bugtracker/util/SchemaExporter*.class')
+}
+
