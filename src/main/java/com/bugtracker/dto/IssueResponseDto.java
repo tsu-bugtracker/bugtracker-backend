@@ -12,6 +12,7 @@ import lombok.Setter;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Set;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -20,8 +21,8 @@ import java.util.Set;
 @Builder
 public class IssueResponseDto {
 
-    private Long id;
-    private Long projectId;
+    private UUID id;
+    private UUID projectId;
     private String title;
     private String description;
     private String stepsToReproduce;

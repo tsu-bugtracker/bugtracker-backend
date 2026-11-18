@@ -12,6 +12,7 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 import java.util.Set;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -31,15 +32,15 @@ public class IssueUpdateDto {
     @NotNull
     private IssuePriority priority;
 
-    private Long assigneeId;
+    private UUID assigneeId;
 
-    private Long componentId;
+    private UUID componentId;
 
-    private Long releaseId;
+    private UUID releaseId;
 
-    private Long fixReleaseId;
+    private UUID fixReleaseId;
 
     private LocalDate deadline;
 
-    private Set<Long> tagIds;
+    private Set<UUID> tagIds;
 }

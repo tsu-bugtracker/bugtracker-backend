@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -15,8 +16,8 @@ import java.time.LocalDate;
 @Builder
 public class ReleaseDto {
 
-    private Long id;
-    private Long projectId;
+    private UUID id;
+    private UUID projectId;
     private String versionName;
     private LocalDate releaseDate;
     private boolean isReleased;

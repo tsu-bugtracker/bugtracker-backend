@@ -9,6 +9,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.UUID;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -26,5 +28,5 @@ public class ProjectCreateDto {
     private String gitRepoUrl;
 
     @NotNull
-    private Long createdById;
+    private UUID createdById;
 }
