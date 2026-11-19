@@ -1,6 +1,8 @@
 package com.bugtracker.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.validation.FieldError;
@@ -52,6 +54,32 @@ public class GlobalExceptionHandler {
                 .toList();
 
         problemDetail.setProperty("errors", validationErrors);
+        return problemDetail;
+    }
+
+    @ExceptionHandler({
+            InvalidDataAccessApiUsageException.class,
+            PropertyReferenceException.class,
+            IllegalArgumentException.class
+    })
+    public ProblemDetail handleInvalidDataAccessApiUsageException(Exception ex) {
+        String message = ex.getMessage();
+        if (ex instanceof PropertyReferenceException
+                || (message != null && message.contains("Sort expression"))) {
+            ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid sort parameter. Use format 'property,asc' or 'property,desc' "
+                            + "(e.g. 'name,asc' or 'createdAt,desc')"
+            );
+            problemDetail.setTitle("Invalid Sort Field");
+            return problemDetail;
+        }
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                message != null ? message : "Invalid request parameter"
+        );
+        problemDetail.setTitle("Bad Request");
         return problemDetail;
     }
 

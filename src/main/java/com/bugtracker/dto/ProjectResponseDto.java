@@ -1,5 +1,6 @@
 package com.bugtracker.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -21,8 +22,14 @@ public class ProjectResponseDto {
     private String description;
     private String gitRepoUrl;
     private UserResponseDto createdBy;
+    @JsonProperty("isActive")
     private boolean isActive;
     private boolean trackingActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    @JsonProperty("isActive")
+    public boolean isActive() {
+        return isActive;
+    }
 }

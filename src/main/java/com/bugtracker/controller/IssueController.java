@@ -9,6 +9,7 @@ import com.bugtracker.dto.IssueLinkDto;
 import com.bugtracker.dto.IssueResponseDto;
 import com.bugtracker.dto.IssueStatusTransitionDto;
 import com.bugtracker.dto.IssueUpdateDto;
+import com.bugtracker.dto.PagedResponse;
 import com.bugtracker.service.IssueLinkService;
 import com.bugtracker.service.IssueService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,6 +18,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -57,10 +63,12 @@ public class IssueController {
 
     @GetMapping
     @Operation(summary = "Get issues of a project with optional filters")
-    @ApiResponse(responseCode = "200", description = "List of issues")
-    public List<IssueResponseDto> getIssues(
+    @ApiResponse(responseCode = "200", description = "Paginated list of issues")
+    public PagedResponse<IssueResponseDto> getIssues(
             @Parameter(description = "Project identifier", required = true)
             @PathVariable UUID projectId,
+            @Parameter(description = "Search across title, description and steps")
+            @RequestParam(required = false) String search,
             @Parameter(description = "Filter by issue status")
             @RequestParam(required = false) IssueStatus status,
             @Parameter(description = "Filter by issue priority")
@@ -72,8 +80,11 @@ public class IssueController {
             @Parameter(description = "Filter by component identifier")
             @RequestParam(required = false) UUID componentId,
             @Parameter(description = "Filter by release identifier")
-            @RequestParam(required = false) UUID releaseId) {
-        return issueService.getIssues(projectId, status, priority, assigneeId, reporterId, componentId, releaseId);
+            @RequestParam(required = false) UUID releaseId,
+            @ParameterObject
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return PagedResponse.of(issueService.getIssues(projectId, search, status, priority, assigneeId, reporterId,
+                componentId, releaseId, pageable));
     }
 
     @GetMapping("/{issueId}")

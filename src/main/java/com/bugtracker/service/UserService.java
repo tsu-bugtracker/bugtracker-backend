@@ -7,11 +7,15 @@ import com.bugtracker.exception.ConflictException;
 import com.bugtracker.exception.ResourceNotFoundException;
 import com.bugtracker.mapper.UserMapper;
 import com.bugtracker.repository.UserRepository;
+import com.bugtracker.specification.UserSpecification;
+import com.bugtracker.util.PaginationUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -42,7 +46,11 @@ public class UserService {
         return userMapper.toDto(user);
     }
 
-    public List<UserResponseDto> getAllUsers() {
-        return userMapper.toDtoList(userRepository.findAll());
+    public Page<UserResponseDto> getAllUsers(String search, Pageable pageable) {
+        Pageable cleanPageable = PaginationUtils.sanitizePageable(
+                pageable, Sort.by(Sort.Direction.ASC, "fullName"));
+        return userRepository
+                .findAll(UserSpecification.filter(search), cleanPageable)
+                .map(userMapper::toDto);
     }
 }

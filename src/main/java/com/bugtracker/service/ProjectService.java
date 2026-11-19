@@ -13,12 +13,16 @@ import com.bugtracker.mapper.ProjectMapper;
 import com.bugtracker.repository.ProjectMemberRepository;
 import com.bugtracker.repository.ProjectRepository;
 import com.bugtracker.repository.UserRepository;
+import com.bugtracker.specification.ProjectSpecification;
+import com.bugtracker.util.PaginationUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -70,10 +74,15 @@ public class ProjectService {
         return projectMapper.toDto(project);
     }
 
-    public List<ProjectResponseDto> getAllProjects() {
-        return projectRepository.findAll().stream()
-                .map(projectMapper::toDto)
-                .toList();
+    public Page<ProjectResponseDto> getAllProjects(String search,
+                                                   Boolean isActive,
+                                                   Boolean trackingActive,
+                                                   Pageable pageable) {
+        Pageable cleanPageable = PaginationUtils.sanitizePageable(
+                pageable, Sort.by(Sort.Direction.ASC, "name"));
+        return projectRepository
+                .findAll(ProjectSpecification.filter(search, isActive, trackingActive), cleanPageable)
+                .map(projectMapper::toDto);
     }
 
     @Transactional

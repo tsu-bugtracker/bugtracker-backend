@@ -24,12 +24,16 @@ import com.bugtracker.repository.ProjectMemberRepository;
 import com.bugtracker.repository.ProjectRepository;
 import com.bugtracker.repository.ReleaseRepository;
 import com.bugtracker.repository.TagRepository;
+import com.bugtracker.specification.IssueSpecification;
+import com.bugtracker.util.PaginationUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -84,27 +88,21 @@ public class IssueService {
         return issueMapper.toDto(findIssue(projectId, issueId));
     }
 
-    public List<IssueResponseDto> getIssues(UUID projectId,
+    public Page<IssueResponseDto> getIssues(UUID projectId,
+                                            String search,
                                             IssueStatus status,
                                             IssuePriority priority,
                                             UUID assigneeId,
                                             UUID reporterId,
                                             UUID componentId,
-                                            UUID releaseId) {
-        List<Issue> issues = issueRepository.findAllByProjectId(projectId).stream()
-                .filter(issue -> status == null || issue.getStatus() == status)
-                .filter(issue -> priority == null || issue.getPriority() == priority)
-                .filter(issue -> assigneeId == null
-                        || (issue.getAssignee() != null && assigneeId.equals(issue.getAssignee().getId())))
-                .filter(issue -> reporterId == null
-                        || (issue.getReporter() != null && reporterId.equals(issue.getReporter().getId())))
-                .filter(issue -> componentId == null
-                        || (issue.getComponent() != null && componentId.equals(issue.getComponent().getId())))
-                .filter(issue -> releaseId == null
-                        || (issue.getRelease() != null && releaseId.equals(issue.getRelease().getId())))
-                .toList();
-
-        return issueMapper.toDtoList(issues);
+                                            UUID releaseId,
+                                            Pageable pageable) {
+        Pageable cleanPageable = PaginationUtils.sanitizePageable(
+                pageable, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return issueRepository
+                .findAll(IssueSpecification.filter(projectId, search, status, priority, assigneeId,
+                        reporterId, componentId, releaseId), cleanPageable)
+                .map(issueMapper::toDto);
     }
 
     @Transactional
