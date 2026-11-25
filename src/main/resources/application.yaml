@@ -12,6 +12,10 @@ spring:
   docker:
     compose:
       enabled: false
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 50MB
 
 springdoc:
   api-docs:
@@ -29,3 +33,12 @@ springdoc:
 app:
   swagger:
     auto-open: false
+  jwt:
+    secret: ${APP_JWT_SECRET:dev-super-secret-key-for-bugtracker-jwt-signing-at-least-32-bytes}
+    access-expiration-ms: ${APP_JWT_ACCESS_EXPIRATION_MS:900000}
+    refresh-expiration-ms: ${APP_JWT_REFRESH_EXPIRATION_MS:2592000000}
+  mail:
+    from: ${APP_MAIL_FROM:noreply@bugtracker.local}
+  frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}

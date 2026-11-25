@@ -15,6 +15,8 @@ spring:
 app:
   swagger:
     auto-open: false
+  jwt:
+    secret: ${APP_JWT_SECRET}
   s3:
     endpoint: ${APP_S3_ENDPOINT}
     access-key: ${APP_S3_ACCESS_KEY}
