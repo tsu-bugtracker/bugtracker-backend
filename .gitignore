@@ -44,3 +44,4 @@ out/
 # Keep local agent instructions untracked
 AGENTS.md
 .vscode/
+docs
