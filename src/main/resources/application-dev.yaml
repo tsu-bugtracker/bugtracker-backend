@@ -1,0 +1,18 @@
+spring:
+  docker:
+    compose:
+      enabled: true
+      file: compose.yaml
+      lifecycle-management: start-and-stop
+  mail:
+    host: localhost
+    port: 1025
+
+app:
+  swagger:
+    auto-open: true
+  s3:
+    endpoint: http://localhost:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    bucket: bugtracker-attachments

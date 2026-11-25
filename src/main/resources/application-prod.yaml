@@ -1,0 +1,22 @@
+spring:
+  docker:
+    compose:
+      enabled: false
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  mail:
+    host: ${SPRING_MAIL_HOST}
+    port: ${SPRING_MAIL_PORT}
+    username: ${SPRING_MAIL_USERNAME}
+    password: ${SPRING_MAIL_PASSWORD}
+
+app:
+  swagger:
+    auto-open: false
+  s3:
+    endpoint: ${APP_S3_ENDPOINT}
+    access-key: ${APP_S3_ACCESS_KEY}
+    secret-key: ${APP_S3_SECRET_KEY}
+    bucket: ${APP_S3_BUCKET}
