@@ -43,5 +43,6 @@ out/
 
 # Keep local agent instructions untracked
 AGENTS.md
+GEMINI.md
 .vscode/
 docs

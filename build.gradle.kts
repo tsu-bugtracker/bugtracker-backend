@@ -47,8 +47,14 @@ dependencies {
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
 	implementation(platform("software.amazon.awssdk:bom:2.59.4"))
 	implementation("software.amazon.awssdk:s3")
+	implementation("io.jsonwebtoken:jjwt-api:0.12.6")
+	runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
+	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
 	runtimeOnly("org.postgresql:postgresql")
 	developmentOnly("org.springframework.boot:spring-boot-docker-compose")
+
+	testImplementation("org.springframework.boot:spring-boot-starter-test")
+	testImplementation("org.springframework.security:spring-security-test")
 
 	liquibaseRuntime(sourceSets.main.get().output)
 	liquibaseRuntime("org.springframework.boot:spring-boot-starter-data-jpa")
@@ -73,4 +79,8 @@ liquibase {
 		)
 	}
 	runList = "main"
+}
+
+tasks.withType<Test> {
+	useJUnitPlatform()
 }
