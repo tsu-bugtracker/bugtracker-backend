@@ -1,0 +1,5585 @@
+openapi: 3.1.0
+info:
+  title: Bugtracker Backend API
+  version: 1.0.0
+  summary: REST API бэкенда баг-трекера студенческих проектов
+  description: |
+    Целевая спецификация REST API сервиса баг-трекера студенческих проектов (`Bearer JWT`).
+    Real-time уведомления передаются через WebSocket/STOMP (`/ws`, подписки `/user/queue/notifications` и `/topic/projects/{projectId}/events`).
+tags:
+  - name: Health
+    description: Проверка доступности сервиса
+  - name: Auth
+    description: Регистрация, вход, токены и восстановление пароля
+  - name: Profile
+    description: Профиль текущего пользователя и настройки уведомлений
+  - name: Admin
+    description: Глобальное администрирование пользователей и аудит
+  - name: Projects
+    description: Проекты, команда, приглашения, компоненты и метки
+  - name: Bugs
+    description: Баги, жизненный цикл, комментарии, вложения, связи и история
+  - name: Planning
+    description: Планирование исправлений, назначение и личные задачи
+  - name: Releases
+    description: Релизы проекта
+  - name: Git Integration
+    description: Интеграция с Git-провайдерами, коммиты и merge request
+  - name: Notifications
+    description: Уведомления и подписки пользователя
+  - name: Analytics
+    description: Дашборды, метрики и отчёты по проектам
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/health:
+    get:
+      tags:
+        - Health
+      operationId: getHealth
+      summary: Проверить состояние сервиса
+      description: |
+        Публичный эндпоинт. Возвращает текущий статус backend-сервиса и его имя.
+      security: []
+      responses:
+        "200":
+          description: Сервис доступен
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/auth/register:
+    post:
+      tags:
+        - Auth
+      operationId: registerUser
+      summary: Зарегистрировать пользователя
+      description: |
+        Публичный эндпоинт. Создаёт аккаунт гостя и отправляет письмо для
+        подтверждения e-mail. Если передан `invitationToken`, регистрация
+        связывается с приглашением в проект; приглашение применяется после
+        подтверждения e-mail. Пароль должен содержать не менее 8 символов.
+        Конфликт `409` возвращается, если e-mail уже зарегистрирован или
+        приглашение не может быть применено.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterRequest" }
+      responses:
+        "201":
+          description: Пользователь зарегистрирован
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserProfile" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/auth/verify-email:
+    post:
+      tags:
+        - Auth
+      operationId: verifyEmail
+      summary: Подтвердить e-mail
+      description: |
+        Публичный эндпоинт. Подтверждает e-mail по одноразовому токену из письма.
+        Недействительный или истёкший токен возвращает `422`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VerifyEmailRequest" }
+      responses:
+        "200":
+          description: E-mail подтверждён
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/auth/resend-verification:
+    post:
+      tags:
+        - Auth
+      operationId: resendVerification
+      summary: Повторно отправить письмо подтверждения
+      description: |
+        Публичный эндпоинт. Повторно отправляет письмо подтверждения e-mail.
+        Ответ не раскрывает, существует ли аккаунт. Частые запросы могут
+        ограничиваться (`409`).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResendVerificationRequest" }
+      responses:
+        "200":
+          description: Письмо отправлено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/auth/login:
+    post:
+      tags:
+        - Auth
+      operationId: login
+      summary: Войти в систему
+      description: |
+        Публичный эндпоинт. Проверяет e-mail и пароль и выдаёт пару JWT-токенов.
+        Вход запрещён (`403`) для неподтверждённого (`emailVerified=false`),
+        заблокированного (`BLOCKED`) или деактивированного (`DEACTIVATED`)
+        аккаунта. Неверные учётные данные возвращают `401`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Успешный вход
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthTokensResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/auth/refresh:
+    post:
+      tags:
+        - Auth
+      operationId: refreshAccessToken
+      summary: Обновить access-токен
+      description: |
+        Публичный эндпоинт. Обменивает действующий refresh-токен на новую пару
+        токенов. Отозванный или истёкший токен возвращает `401`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshTokenRequest" }
+      responses:
+        "200":
+          description: Токены обновлены
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthTokensResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/auth/logout:
+    post:
+      tags:
+        - Auth
+      operationId: logout
+      summary: Выйти из системы
+      description: |
+        Завершает текущую сессию и отзывает переданный refresh-токен (если указан).
+        Требуется аутентификация. Повторный вызов для уже отозванного токена
+        остаётся идемпотентным и возвращает `204`.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LogoutRequest" }
+      responses:
+        "204":
+          description: Сессия завершена
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/auth/password-reset/request:
+    post:
+      tags:
+        - Auth
+      operationId: requestPasswordReset
+      summary: Запросить сброс пароля
+      description: |
+        Публичный эндпоинт. Отправляет письмо со ссылкой для сброса пароля.
+        Ответ `202` не раскрывает, существует ли аккаунт с таким e-mail.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordResetRequest" }
+      responses:
+        "202":
+          description: Запрос на сброс пароля принят
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/auth/password-reset/confirm:
+    post:
+      tags:
+        - Auth
+      operationId: confirmPasswordReset
+      summary: Подтвердить сброс пароля
+      description: |
+        Публичный эндпоинт. Устанавливает новый пароль по одноразовому токену.
+        Пароль должен содержать не менее 8 символов. Недействительный или
+        истёкший токен возвращает `422`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordResetConfirmRequest" }
+      responses:
+        "200":
+          description: Пароль изменён
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/users/me:
+    get:
+      tags:
+        - Profile
+      operationId: getCurrentProfile
+      summary: Получить профиль текущего пользователя
+      description: |
+        Доступно любому аутентифицированному пользователю. Возвращает профиль,
+        глобальную роль, статус аккаунта и право создавать проекты.
+      responses:
+        "200":
+          description: Профиль пользователя
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserProfile" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    patch:
+      tags:
+        - Profile
+      operationId: updateCurrentProfile
+      summary: Обновить профиль текущего пользователя
+      description: |
+        Доступно любому аутентифицированному пользователю. Позволяет изменить
+        отображаемое имя и URL аватара. E-mail и статус аккаунта не изменяются.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProfileRequest" }
+      responses:
+        "200":
+          description: Профиль обновлён
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserProfile" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/users/me/password:
+    post:
+      tags:
+        - Profile
+      operationId: changeCurrentPassword
+      summary: Изменить пароль текущего пользователя
+      description: |
+        Доступно любому аутентифицированному пользователю. Требует текущий пароль;
+        новый пароль должен содержать не менее 8 символов. Неверный текущий пароль
+        возвращает `422`, после успешной смены все прочие refresh-токены отзываются.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
+      responses:
+        "204":
+          description: Пароль изменён
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/users/me/notification-settings:
+    get:
+      tags:
+        - Profile
+      operationId: getNotificationSettings
+      summary: Получить настройки уведомлений
+      description: |
+        Доступно любому аутентифицированному пользователю. Возвращает глобальные
+        каналы (`inAppEnabled`, `emailEnabled`) и настройки по каждому событию.
+      responses:
+        "200":
+          description: Настройки уведомлений
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationSettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    put:
+      tags:
+        - Profile
+      operationId: updateNotificationSettings
+      summary: Обновить настройки уведомлений
+      description: |
+        Доступно любому аутентифицированному пользователю. Полностью заменяет
+        настройки уведомлений. События: `bugCreated`, `bugAssigned`,
+        `bugStatusChanged`, `bugCommented`, `mention`, `projectInvited`,
+        `releasePublished`; для каждого настраиваются каналы `inApp` и `email`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationSettings" }
+      responses:
+        "200":
+          description: Настройки сохранены
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationSettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/admin/users:
+    get:
+      tags:
+        - Admin
+      operationId: listAdminUsers
+      summary: Список пользователей
+      description: |
+        Доступно только администратору (`isAdmin=true`). Поддерживает поиск по
+        e-mail и ФИО, фильтры по статусу, глобальной роли и подтверждению e-mail,
+        а также пагинацию.
+      parameters:
+        - name: query
+          in: query
+          required: false
+          description: Поиск по e-mail или ФИО
+          schema: { type: string }
+        - name: status
+          in: query
+          required: false
+          description: Фильтр по статусу аккаунта
+          schema: { $ref: "#/components/schemas/UserStatus" }
+        - name: isAdmin
+          in: query
+          required: false
+          description: Фильтр по глобальной роли администратора
+          schema: { type: boolean }
+        - name: emailVerified
+          in: query
+          required: false
+          description: Фильтр по подтверждению e-mail
+          schema: { type: boolean }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: Страница пользователей
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PagedAdminUserSummary" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/admin/users/{userId}:
+    get:
+      tags:
+        - Admin
+      operationId: getAdminUser
+      summary: Детали пользователя
+      description: |
+        Доступно только администратору (`isAdmin=true`). Возвращает профиль
+        пользователя, его проекты и роли в них.
+      parameters:
+        - $ref: "#/components/parameters/UserIdPath"
+      responses:
+        "200":
+          description: Детали пользователя
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDetails" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/admin/users/{userId}/block:
+    post:
+      tags:
+        - Admin
+      operationId: blockAdminUser
+      summary: Заблокировать пользователя
+      description: |
+        Доступно только администратору (`isAdmin=true`). Переводит аккаунт в
+        `BLOCKED` и отзывает активные сессии. Заблокировать самого себя нельзя —
+        `409 Conflict`.
+      parameters:
+        - $ref: "#/components/parameters/UserIdPath"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlockUserRequest" }
+      responses:
+        "200":
+          description: Пользователь заблокирован
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDetails" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/admin/users/{userId}/unblock:
+    post:
+      tags:
+        - Admin
+      operationId: unblockAdminUser
+      summary: Разблокировать пользователя
+      description: |
+        Доступно только администратору (`isAdmin=true`). Возвращает аккаунт из
+        статуса `BLOCKED` в `ACTIVE`. Для деактивированного аккаунта операция
+        возвращает `409 Conflict`.
+      parameters:
+        - $ref: "#/components/parameters/UserIdPath"
+      responses:
+        "200":
+          description: Пользователь разблокирован
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDetails" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/admin/users/{userId}/password-reset:
+    post:
+      tags:
+        - Admin
+      operationId: triggerAdminUserPasswordReset
+      summary: Инициировать сброс пароля пользователя
+      description: |
+        Доступно только администратору (`isAdmin=true`). Отправляет пользователю
+        письмо со ссылкой сброса пароля. Администратор не задаёт пароль напрямую.
+      parameters:
+        - $ref: "#/components/parameters/UserIdPath"
+      responses:
+        "202":
+          description: Письмо для сброса пароля отправлено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/admin/users/{userId}/verify-email:
+    post:
+      tags:
+        - Admin
+      operationId: verifyAdminUserEmail
+      summary: Подтвердить e-mail пользователя вручную
+      description: |
+        Доступно только администратору (`isAdmin=true`). Устанавливает
+        `emailVerified=true` без письма. Если e-mail уже подтверждён, операция
+        идемпотентна и возвращает актуальные детали.
+      parameters:
+        - $ref: "#/components/parameters/UserIdPath"
+      responses:
+        "200":
+          description: E-mail подтверждён
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDetails" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/admin/users/{userId}/admin-role:
+    patch:
+      tags:
+        - Admin
+      operationId: updateAdminRole
+      summary: Изменить глобальную роль администратора
+      description: |
+        Доступно только администратору (`isAdmin=true`). Выдаёт или снимает
+        глобальную роль `isAdmin`. Снять роль с последнего администратора нельзя —
+        `409 Conflict`.
+      parameters:
+        - $ref: "#/components/parameters/UserIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminRoleRequest" }
+      responses:
+        "200":
+          description: Роль обновлена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDetails" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/admin/users/{userId}/deactivate:
+    post:
+      tags:
+        - Admin
+      operationId: deactivateAdminUser
+      summary: Деактивировать пользователя
+      description: |
+        Доступно только администратору (`isAdmin=true`). Переводит аккаунт в
+        `DEACTIVATED` и отзывает сессии. Запрещено деактивировать самого себя или
+        последнего администратора — `409 Conflict`.
+      parameters:
+        - $ref: "#/components/parameters/UserIdPath"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeactivateUserRequest" }
+      responses:
+        "200":
+          description: Пользователь деактивирован
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDetails" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/admin/audit-logs:
+    get:
+      tags:
+        - Admin
+      operationId: listAuditLogs
+      summary: Журнал аудита
+      description: |
+        Доступно только администратору (`isAdmin=true`). Возвращает
+        административные действия с фильтрами по актору, действию, типу и
+        идентификатору цели, периоду и пагинацией.
+      parameters:
+        - name: actorId
+          in: query
+          required: false
+          description: Идентификатор пользователя-актора
+          schema: { type: string, format: uuid }
+        - name: action
+          in: query
+          required: false
+          description: Код действия (например, USER_BLOCKED)
+          schema: { type: string }
+        - name: targetType
+          in: query
+          required: false
+          description: Тип цели действия (например, USER, PROJECT, BUG)
+          schema: { type: string }
+        - name: targetId
+          in: query
+          required: false
+          description: Идентификатор цели действия
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          required: false
+          description: Начало периода (включительно)
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: false
+          description: Конец периода (включительно)
+          schema: { type: string, format: date-time }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: Страница журнала аудита
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PagedAuditLogEntry" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/projects:
+    get:
+      tags:
+        - Projects
+      operationId: listProjects
+      summary: Список проектов
+      description: "Возвращает проекты, доступные текущему пользователю, с фильтрацией по статусу и поиском по названию. Доступно авторизованным пользователям; пагинация через Page и Size."
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Фильтр по статусу проекта.
+          schema:
+            $ref: "#/components/schemas/ProjectStatus"
+        - name: search
+          in: query
+          required: false
+          description: Поиск по названию проекта.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: Страница проектов.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedProjectSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags:
+        - Projects
+      operationId: createProject
+      summary: Создание проекта
+      description: "Создаёт проект в статусе ACTIVE; создатель становится TEAM_LEAD, bugTrackingEnabled=false. Название должно быть уникальным (409), gitRepositoryUrl при указании проверяется на доступность (422)."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+      responses:
+        "201":
+          description: Проект создан.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/projects/{projectId}:
+    get:
+      tags:
+        - Projects
+      operationId: getProject
+      summary: Карточка проекта
+      description: "Возвращает детали проекта. Доступно участникам проекта; для неучастников — 403."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: Детали проекта.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetails"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags:
+        - Projects
+      operationId: updateProject
+      summary: Обновление проекта
+      description: "Изменяет параметры проекта. Доступно TEAM_LEAD; для проекта в статусе ARCHIVED возвращает 409."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectRequest"
+      responses:
+        "200":
+          description: Проект обновлён.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/projects/{projectId}/archive:
+    post:
+      tags:
+        - Projects
+      operationId: archiveProject
+      summary: Архивация проекта
+      description: "Переводит проект в статус ARCHIVED. Доступно TEAM_LEAD; повторная архивация возвращает 409."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: Проект архивирован.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetails"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/projects/{projectId}/members:
+    get:
+      tags:
+        - Projects
+      operationId: listProjectMembers
+      summary: Команда проекта
+      description: "Возвращает участников проекта. Доступно ролям TEAM_LEAD, DEVELOPER, TESTER и OBSERVER."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: Состав команды проекта.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectTeamResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Projects
+      operationId: addProjectMember
+      summary: Добавление участника
+      description: "Добавляет участника по email. Доступно TEAM_LEAD и только для проекта не в ARCHIVED. Зарегистрированный пользователь добавляется со статусом ACTIVE и получает уведомление; незарегистрированный — ProjectInvitation в статусе PENDING и письмо."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddProjectMemberRequest"
+      responses:
+        "201":
+          description: Участник добавлен или приглашение создано.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddMemberResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/projects/{projectId}/members/{memberId}/role:
+    patch:
+      tags:
+        - Projects
+      operationId: updateProjectMemberRole
+      summary: Изменение роли участника
+      description: "Меняет роль участника. Доступно TEAM_LEAD и только для проекта не в ARCHIVED. Нельзя убрать последнего TEAM_LEAD (409); при уходе последнего активного TESTER bugTrackingEnabled становится false."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/MemberIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemberRoleRequest"
+      responses:
+        "200":
+          description: Роль обновлена.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/projects/{projectId}/members/{memberId}:
+    delete:
+      tags:
+        - Projects
+      operationId: removeProjectMember
+      summary: Удаление участника
+      description: "Удаляет участника из проекта. Доступно TEAM_LEAD и только для проекта не в ARCHIVED. Нельзя удалить последнего TEAM_LEAD (409)."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/MemberIdPath"
+      responses:
+        "204":
+          description: Участник удалён.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/projects/{projectId}/team/finalize:
+    post:
+      tags:
+        - Projects
+      operationId: finalizeProjectTeam
+      summary: Финализация команды
+      description: "Проверяет наличие активного TESTER и фиксирует готовность команды. Доступно TEAM_LEAD; возвращает булев флаг bugTrackingEnabled и предупреждение при отсутствии тестировщика."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: Результат проверки команды.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamFinalizeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{projectId}/invitations:
+    get:
+      tags:
+        - Projects
+      operationId: listProjectInvitations
+      summary: Приглашения проекта
+      description: "Возвращает приглашения проекта. Доступно TEAM_LEAD."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: Список приглашений.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectInvitation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{projectId}/invitations/{invitationId}:
+    delete:
+      tags:
+        - Projects
+      operationId: cancelProjectInvitation
+      summary: Отмена приглашения
+      description: "Отменяет приглашение. Доступно TEAM_LEAD; уже принятое приглашение отменить нельзя (409)."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/InvitationIdPath"
+      responses:
+        "204":
+          description: Приглашение отменено.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/invitations/{token}:
+    get:
+      tags:
+        - Projects
+      operationId: getInvitationByToken
+      summary: Приглашение по токену
+      description: "Возвращает публичные детали приглашения по токену. Аутентификация не требуется."
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/InvitationTokenPath"
+      responses:
+        "200":
+          description: Детали приглашения.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationDetails"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/invitations/{token}/accept:
+    post:
+      tags:
+        - Projects
+      operationId: acceptInvitation
+      summary: Принятие приглашения
+      description: "Принимает приглашение и добавляет текущего авторизованного пользователя в проект. Повторное принятие или истёкшее приглашение возвращает 409."
+      parameters:
+        - $ref: "#/components/parameters/InvitationTokenPath"
+      responses:
+        "200":
+          description: Приглашение принято, участник добавлен.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectMember"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/projects/{projectId}/components:
+    get:
+      tags:
+        - Projects
+      operationId: listProjectComponents
+      summary: Компоненты проекта
+      description: "Возвращает программные компоненты проекта. Доступно ролям TEAM_LEAD, DEVELOPER и TESTER."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: Список компонентов.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SoftwareComponent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Projects
+      operationId: createProjectComponent
+      summary: Создание компонента
+      description: "Создаёт компонент проекта. Доступно TEAM_LEAD; название компонента в проекте должно быть уникальным (409)."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComponentRequest"
+      responses:
+        "201":
+          description: Компонент создан.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SoftwareComponent"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/projects/{projectId}/components/{componentId}:
+    patch:
+      tags:
+        - Projects
+      operationId: updateProjectComponent
+      summary: Обновление компонента
+      description: "Изменяет компонент проекта. Доступно TEAM_LEAD; для названия действует проверка уникальности (409)."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/ComponentIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateComponentRequest"
+      responses:
+        "200":
+          description: Компонент обновлён.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SoftwareComponent"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      tags:
+        - Projects
+      operationId: deleteProjectComponent
+      summary: Удаление компонента
+      description: "Удаляет компонент проекта. Доступно TEAM_LEAD; компонент, используемый в багах, удалить нельзя (409)."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/ComponentIdPath"
+      responses:
+        "204":
+          description: Компонент удалён.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/projects/{projectId}/labels:
+    get:
+      tags:
+        - Projects
+      operationId: listProjectLabels
+      summary: Метки проекта
+      description: "Возвращает метки проекта. Доступно ролям TEAM_LEAD, DEVELOPER и TESTER."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: Список меток.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Label"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Projects
+      operationId: createProjectLabel
+      summary: Создание метки
+      description: "Создаёт метку проекта. Доступно TEAM_LEAD, DEVELOPER и TESTER; название метки в проекте должно быть уникальным (409)."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLabelRequest"
+      responses:
+        "201":
+          description: Метка создана.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/projects/{projectId}/labels/merge:
+    post:
+      tags:
+        - Projects
+      operationId: mergeProjectLabels
+      summary: Слияние меток
+      description: "Объединяет исходные метки в целевую и возвращает итоговую метку. Доступно TEAM_LEAD; при некорректном наборе меток — 422."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeLabelsRequest"
+      responses:
+        "200":
+          description: Метки объединены.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/projects/{projectId}/labels/{labelId}:
+    patch:
+      tags:
+        - Projects
+      operationId: updateProjectLabel
+      summary: Обновление метки
+      description: "Изменяет метку проекта. Доступно TEAM_LEAD; новое название должно быть уникальным (409)."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/LabelIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLabelRequest"
+      responses:
+        "200":
+          description: Метка обновлена.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      tags:
+        - Projects
+      operationId: deleteProjectLabel
+      summary: Удаление метки
+      description: "Удаляет метку проекта. Доступно TEAM_LEAD; метка отвязывается от багов."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/LabelIdPath"
+      responses:
+        "204":
+          description: Метка удалена.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{projectId}/bugs:
+    get:
+      tags:
+        - Bugs
+      operationId: listProjectBugs
+      summary: Список багов проекта
+      description: "Возвращает баги проекта с фильтрами и сортировкой. Доступно ролям TEAM_LEAD, DEVELOPER и TESTER; пагинация через Page и Size."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: search
+          in: query
+          required: false
+          description: Поиск по заголовку и описанию.
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          description: Фильтр по статусам бага.
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/BugStatus"
+        - name: priority
+          in: query
+          required: false
+          description: Фильтр по приоритетам.
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/BugPriority"
+        - name: resolution
+          in: query
+          required: false
+          description: Фильтр по резолюции.
+          schema:
+            $ref: "#/components/schemas/BugResolution"
+        - name: assigneeId
+          in: query
+          required: false
+          description: Фильтр по исполнителю.
+          schema:
+            type: string
+            format: uuid
+        - name: authorId
+          in: query
+          required: false
+          description: Фильтр по автору.
+          schema:
+            type: string
+            format: uuid
+        - name: componentId
+          in: query
+          required: false
+          description: Фильтр по компоненту.
+          schema:
+            type: string
+            format: uuid
+        - name: labelId
+          in: query
+          required: false
+          description: Фильтр по метке.
+          schema:
+            type: string
+            format: uuid
+        - name: releaseId
+          in: query
+          required: false
+          description: Фильтр по релизу.
+          schema:
+            type: string
+            format: uuid
+        - name: overdue
+          in: query
+          required: false
+          description: Только просроченные баги.
+          schema:
+            type: boolean
+        - name: sort
+          in: query
+          required: false
+          description: Поле и направление сортировки.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: Страница багов.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedBugSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Bugs
+      operationId: createBug
+      summary: Создание бага
+      description: "Создаёт баг в проекте. Доступно TESTER; проект должен быть ACTIVE и иметь bugTrackingEnabled=true, иначе 409."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBugRequest"
+      responses:
+        "201":
+          description: Баг создан.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BugDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/bugs/{bugId}:
+    get:
+      tags:
+        - Bugs
+      operationId: getBug
+      summary: Карточка бага
+      description: "Возвращает детали бага. Доступно ролям TEAM_LEAD, DEVELOPER и TESTER."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      responses:
+        "200":
+          description: Детали бага.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BugDetails"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags:
+        - Bugs
+      operationId: updateBug
+      summary: Обновление бага
+      description: "Изменяет поля бага. Доступно TESTER и TEAM_LEAD; для проекта в ARCHIVED возвращает 409."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBugRequest"
+      responses:
+        "200":
+          description: Баг обновлён.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BugDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/bugs/{bugId}/request-clarification:
+    post:
+      tags:
+        - Bugs
+      operationId: requestBugClarification
+      summary: Запрос уточнений
+      description: "Переводит баг из IN_PROGRESS в NEEDS_INFO. Доступно DEVELOPER; проект не в ARCHIVED."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestClarificationRequest"
+      responses:
+        "200":
+          description: Статус изменён на NEEDS_INFO.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BugDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/bugs/{bugId}/clarify:
+    post:
+      tags:
+        - Bugs
+      operationId: clarifyBug
+      summary: Ответ на уточнения
+      description: "Переводит баг из NEEDS_INFO в IN_PROGRESS. Доступно TESTER; проект не в ARCHIVED."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClarifyBugRequest"
+      responses:
+        "200":
+          description: Статус изменён на IN_PROGRESS.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BugDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/bugs/{bugId}/fix:
+    post:
+      tags:
+        - Bugs
+      operationId: fixBug
+      summary: Отправка исправления
+      description: "Переводит баг из IN_PROGRESS или RETURNED в IN_REVIEW. Доступно DEVELOPER, назначенному исполнителю; коммиты и MR проверяются через Git-интеграцию (422, если коммит не найден)."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FixBugRequest"
+      responses:
+        "200":
+          description: Исправление отправлено на проверку.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BugDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/bugs/{bugId}/verify:
+    post:
+      tags:
+        - Bugs
+      operationId: verifyBug
+      summary: Проверка исправления
+      description: "Проверяет баг из IN_REVIEW. Доступно TESTER; CONFIRM переводит в CLOSED с resolution=FIXED и fixedInReleaseId, RETURN — в RETURNED с обязательным comment."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyBugRequest"
+      responses:
+        "200":
+          description: Результат проверки применён.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BugDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/bugs/{bugId}/close-without-fix:
+    post:
+      tags:
+        - Bugs
+      operationId: closeBugWithoutFix
+      summary: Закрытие без исправления
+      description: "Закрывает баг из NEW, PLANNED, IN_PROGRESS, NEEDS_INFO, IN_REVIEW или RETURNED. Доступно TESTER; resolution — NOT_A_BUG, DUPLICATE или CANNOT_REPRODUCE, итоговый статус CLOSED."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloseWithoutFixRequest"
+      responses:
+        "200":
+          description: Баг закрыт.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BugDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/bugs/{bugId}/reopen:
+    post:
+      tags:
+        - Bugs
+      operationId: reopenBug
+      summary: Переоткрытие бага
+      description: "Переоткрывает баг из CLOSED в REOPENED и очищает resolution и fixedInRelease. Доступно TESTER; проект не в ARCHIVED."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReopenBugRequest"
+      responses:
+        "200":
+          description: Баг переоткрыт.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BugDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/bugs/{bugId}/comments:
+    get:
+      tags:
+        - Bugs
+      operationId: listBugComments
+      summary: Комментарии бага
+      description: "Возвращает комментарии бага с пагинацией. Доступно ролям TEAM_LEAD, DEVELOPER и TESTER."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: Страница комментариев.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedComment"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Bugs
+      operationId: createBugComment
+      summary: Добавление комментария
+      description: "Добавляет комментарий к багу. Доступно TEAM_LEAD, DEVELOPER и TESTER; проект не в ARCHIVED."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCommentRequest"
+      responses:
+        "201":
+          description: Комментарий создан.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/bugs/{bugId}/comments/{commentId}:
+    patch:
+      tags:
+        - Bugs
+      operationId: updateBugComment
+      summary: Редактирование комментария
+      description: "Изменяет комментарий. Доступно автору комментария или TEAM_LEAD; проект не в ARCHIVED."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+        - $ref: "#/components/parameters/CommentIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCommentRequest"
+      responses:
+        "200":
+          description: Комментарий обновлён.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      tags:
+        - Bugs
+      operationId: deleteBugComment
+      summary: Удаление комментария
+      description: "Удаляет комментарий. Доступно автору комментария или TEAM_LEAD; проект не в ARCHIVED."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+        - $ref: "#/components/parameters/CommentIdPath"
+      responses:
+        "204":
+          description: Комментарий удалён.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/bugs/{bugId}/attachments:
+    get:
+      tags:
+        - Bugs
+      operationId: listBugAttachments
+      summary: Вложения бага
+      description: "Возвращает вложения бага. Доступно ролям TEAM_LEAD, DEVELOPER и TESTER."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      responses:
+        "200":
+          description: Список вложений.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Attachment"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Bugs
+      operationId: uploadBugAttachment
+      summary: Загрузка вложения
+      description: "Загружает файл вложения, опционально привязанный к комментарию. Доступно TEAM_LEAD, DEVELOPER и TESTER; проект не в ARCHIVED."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/UploadAttachmentRequest"
+      responses:
+        "201":
+          description: Вложение загружено.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attachment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/attachments/{attachmentId}/download:
+    get:
+      tags:
+        - Bugs
+      operationId: downloadAttachment
+      summary: Скачивание вложения
+      description: "Возвращает содержимое вложения потоком. Доступно ролям TEAM_LEAD, DEVELOPER и TESTER."
+      parameters:
+        - $ref: "#/components/parameters/AttachmentIdPath"
+      responses:
+        "200":
+          description: Бинарное содержимое файла.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/attachments/{attachmentId}:
+    delete:
+      tags:
+        - Bugs
+      operationId: deleteAttachment
+      summary: Удаление вложения
+      description: "Удаляет вложение. Доступно автору вложения или TEAM_LEAD; проект не в ARCHIVED."
+      parameters:
+        - $ref: "#/components/parameters/AttachmentIdPath"
+      responses:
+        "204":
+          description: Вложение удалено.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/bugs/{bugId}/links:
+    post:
+      tags:
+        - Bugs
+      operationId: linkBugs
+      summary: Связывание багов
+      description: "Создаёт связь между багами. Доступно TESTER; проект не в ARCHIVED, дублирующая связь возвращает 409."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBugLinkRequest"
+      responses:
+        "201":
+          description: Связь создана.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BugLink"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/bugs/{bugId}/links/{linkId}:
+    delete:
+      tags:
+        - Bugs
+      operationId: unlinkBugs
+      summary: Удаление связи багов
+      description: "Удаляет связь между багами. Доступно TESTER; проект не в ARCHIVED."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+        - $ref: "#/components/parameters/LinkIdPath"
+      responses:
+        "204":
+          description: Связь удалена.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/bugs/{bugId}/history:
+    get:
+      tags:
+        - Bugs
+      operationId: getBugHistory
+      summary: История изменений бага
+      description: "Возвращает историю изменений бага с пагинацией. Доступно ролям TEAM_LEAD, DEVELOPER и TESTER."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: Страница истории.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedBugHistoryEntry"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/bugs/{bugId}/plan:
+    put:
+      tags:
+        - Planning
+      operationId: planBugFix
+      summary: Планирование исправления
+      description: "Планирует исправление и переводит баг из NEW или REOPENED в PLANNED. Доступно TEAM_LEAD; если priority отличается от recommendedPriority, обязательна priorityChangeReason (422)."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FixPlanRequest"
+      responses:
+        "200":
+          description: План сохранён, баг в PLANNED.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BugDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/bugs/{bugId}/assign:
+    post:
+      tags:
+        - Planning
+      operationId: assignBug
+      summary: Назначение исполнителя
+      description: "Назначает исполнителя на баг. Доступно TEAM_LEAD; проект не в ARCHIVED."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignBugRequest"
+      responses:
+        "200":
+          description: Исполнитель назначен.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BugDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/bugs/{bugId}/take:
+    post:
+      tags:
+        - Planning
+      operationId: takeBugInWork
+      summary: Взять баг в работу
+      description: "Назначает текущего разработчика исполнителем и переводит баг из NEW, PLANNED, REOPENED или RETURNED в IN_PROGRESS. Доступно DEVELOPER; проект не в ARCHIVED."
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      responses:
+        "200":
+          description: Баг взят в работу.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BugDetails"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/projects/{projectId}/backlog:
+    get:
+      tags:
+        - Planning
+      operationId: getProjectBacklog
+      summary: Бэклог проекта
+      description: "Возвращает нераспланированные и запланированные баги проекта. Доступно ролям TEAM_LEAD и DEVELOPER; пагинация через Page и Size."
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: priority
+          in: query
+          required: false
+          description: Фильтр по приоритетам.
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/BugPriority"
+        - name: componentId
+          in: query
+          required: false
+          description: Фильтр по компоненту.
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: Страница бэклога.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedBugSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/tasks/my:
+    get:
+      tags:
+        - Planning
+      operationId: getMyTasks
+      summary: Мои задачи
+      description: "Возвращает задачи текущего пользователя с фильтрами по проекту и статусу. Доступно ролям DEVELOPER и TESTER; пагинация через Page и Size."
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          description: Фильтр по проекту.
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          description: Фильтр по статусам бага.
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/BugStatus"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: Страница задач пользователя.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedBugSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/projects/{projectId}/releases:
+    get:
+      tags: [Releases]
+      operationId: listProjectReleases
+      summary: Список релизов проекта
+      description: Доступно ролям TEAM_LEAD, DEVELOPER, TESTER и OBSERVER. Возвращает постраничный список релизов проекта с опциональной фильтрацией по статусу.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: status
+          in: query
+          required: false
+          description: Фильтр по статусу релиза.
+          schema:
+            $ref: "#/components/schemas/ReleaseStatus"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: Постраничный список релизов.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedReleaseSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Releases]
+      operationId: createRelease
+      summary: Создать релиз
+      description: Доступно роли TEAM_LEAD. Недоступно для проекта в статусе ARCHIVED (409).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReleaseRequest"
+      responses:
+        "201":
+          description: Релиз создан.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/releases/{releaseId}:
+    get:
+      tags: [Releases]
+      operationId: getRelease
+      summary: Получить релиз
+      description: Доступно ролям TEAM_LEAD, DEVELOPER, TESTER и OBSERVER. Возвращает детали релиза по идентификатору.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReleaseIdPath"
+      responses:
+        "200":
+          description: Детали релиза.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseDetails"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Releases]
+      operationId: updateRelease
+      summary: Обновить релиз
+      description: Доступно роли TEAM_LEAD. Недоступно для проекта в статусе ARCHIVED и для релиза не в статусе PLANNED (409).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReleaseIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReleaseRequest"
+      responses:
+        "200":
+          description: Релиз обновлён.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: [Releases]
+      operationId: deleteRelease
+      summary: Удалить релиз
+      description: Доступно роли TEAM_LEAD. Недоступно для проекта в статусе ARCHIVED и для релиза не в статусе PLANNED (409).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReleaseIdPath"
+      responses:
+        "204":
+          description: Релиз удалён.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/releases/{releaseId}/bugs:
+    put:
+      tags: [Releases]
+      operationId: setReleaseBugs
+      summary: Задать состав багов релиза
+      description: Доступно роли TEAM_LEAD. Недоступно для проекта в статусе ARCHIVED и для релиза не в статусе PLANNED (409). Полностью заменяет набор багов релиза.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReleaseIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetReleaseBugsRequest"
+      responses:
+        "200":
+          description: Состав багов обновлён.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/releases/{releaseId}/publish:
+    post:
+      tags: [Releases]
+      operationId: publishRelease
+      summary: Опубликовать релиз
+      description: Доступно роли TEAM_LEAD. Недоступно для проекта в статусе ARCHIVED и для релиза не в статусе PLANNED (409).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReleaseIdPath"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishReleaseRequest"
+      responses:
+        "200":
+          description: Релиз опубликован.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/projects/{projectId}/git-integration:
+    get:
+      tags: [Git Integration]
+      operationId: getGitIntegration
+      summary: Получить интеграцию с Git
+      description: Доступно ролям TEAM_LEAD и DEVELOPER. Возвращает настройки Git-интеграции проекта.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: Настройки Git-интеграции.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitIntegrationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Git Integration]
+      operationId: upsertGitIntegration
+      summary: Сохранить интеграцию с Git
+      description: Доступно ролям TEAM_LEAD и DEVELOPER. Недоступно для проекта в статусе ARCHIVED. Проверяет доступность Git-репозитория и возвращает 422, если он недоступен.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertGitIntegrationRequest"
+      responses:
+        "200":
+          description: Интеграция сохранена.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitIntegrationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      tags: [Git Integration]
+      operationId: disconnectGitIntegration
+      summary: Отключить интеграцию с Git
+      description: Доступно ролям TEAM_LEAD и DEVELOPER. Недоступно для проекта в статусе ARCHIVED.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "204":
+          description: Интеграция отключена.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/projects/{projectId}/git-integration/sync:
+    post:
+      tags: [Git Integration]
+      operationId: syncGitCommits
+      summary: Синхронизировать коммиты
+      description: Доступно роли DEVELOPER. Недоступно для проекта в статусе ARCHIVED. Запускает синхронизацию коммитов из внешнего Git-репозитория.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitSyncRequest"
+      responses:
+        "200":
+          description: Результат синхронизации.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitSyncResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/projects/{projectId}/git-commits:
+    get:
+      tags: [Git Integration]
+      operationId: listProjectGitCommits
+      summary: Список коммитов проекта
+      description: Доступно ролям TEAM_LEAD, DEVELOPER и TESTER. Возвращает постраничный список коммитов с фильтрацией по поиску и типу.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: search
+          in: query
+          required: false
+          description: Поиск по сообщению или хешу коммита.
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          description: Фильтр по типу коммита.
+          schema:
+            $ref: "#/components/schemas/GitCommitType"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: Постраничный список коммитов.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedGitCommitInfo"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/bugs/{bugId}/commits:
+    post:
+      tags: [Git Integration]
+      operationId: linkBugCommit
+      summary: Привязать коммит к багу
+      description: Доступно роли DEVELOPER. Недоступно для проекта в статусе ARCHIVED. Проверяет наличие коммита во внешнем Git и возвращает 422, если он не найден.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkCommitRequest"
+      responses:
+        "201":
+          description: Коммит привязан.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkedCommit"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api/v1/bugs/{bugId}/commits/{commitLinkId}:
+    delete:
+      tags: [Git Integration]
+      operationId: unlinkBugCommit
+      summary: Отвязать коммит от бага
+      description: Доступно роли DEVELOPER. Недоступно для проекта в статусе ARCHIVED.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BugIdPath"
+        - $ref: "#/components/parameters/CommitLinkIdPath"
+      responses:
+        "204":
+          description: Коммит отвязан.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/notifications:
+    get:
+      tags: [Notifications]
+      operationId: listNotifications
+      summary: Список уведомлений
+      description: Доступно любому авторизованному пользователю. Возвращает постраничный список его уведомлений с фильтрацией по непрочитанным и проекту.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: unreadOnly
+          in: query
+          required: false
+          description: Возвращать только непрочитанные уведомления.
+          schema:
+            type: boolean
+        - name: projectId
+          in: query
+          required: false
+          description: Фильтр по проекту.
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: Постраничный список уведомлений.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedNotification"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/notifications/{notificationId}/read:
+    post:
+      tags: [Notifications]
+      operationId: markNotificationRead
+      summary: Отметить уведомление прочитанным
+      description: Доступно владельцу уведомления. Отмечает одно уведомление как прочитанное.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/NotificationIdPath"
+      responses:
+        "204":
+          description: Уведомление прочитано.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/notifications/read-all:
+    post:
+      tags: [Notifications]
+      operationId: markAllNotificationsRead
+      summary: Отметить все уведомления прочитанными
+      description: Доступно любому авторизованному пользователю. Отмечает все уведомления текущего пользователя как прочитанные.
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Все уведомления прочитаны.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/subscriptions:
+    get:
+      tags: [Notifications]
+      operationId: listSubscriptions
+      summary: Список подписок
+      description: Доступно любому авторизованному пользователю. Возвращает подписки текущего пользователя на уведомления.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Список подписок.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subscription"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Notifications]
+      operationId: createSubscription
+      summary: Создать подписку
+      description: Доступно любому авторизованному пользователю. Создаёт подписку на уведомления по заданным условиям.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubscriptionRequest"
+      responses:
+        "201":
+          description: Подписка создана.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/subscriptions/{subscriptionId}:
+    delete:
+      tags: [Notifications]
+      operationId: deleteSubscription
+      summary: Удалить подписку
+      description: Доступно владельцу подписки. Удаляет подписку текущего пользователя.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SubscriptionIdPath"
+      responses:
+        "204":
+          description: Подписка удалена.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{projectId}/dashboard:
+    get:
+      tags: [Analytics]
+      operationId: getProjectDashboard
+      summary: Дашборд проекта
+      description: Доступно роли TEAM_LEAD. Возвращает сводные показатели проекта для дашборда.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: Данные дашборда.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDashboard"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{projectId}/metrics:
+    get:
+      tags: [Analytics]
+      operationId: getProjectMetrics
+      summary: Метрики проекта
+      description: Доступно роли TEAM_LEAD. Возвращает метрики проекта за указанный период.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: from
+          in: query
+          required: false
+          description: Начало периода.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: Конец периода.
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Метрики проекта.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectMetrics"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{projectId}/reports:
+    get:
+      tags: [Analytics]
+      operationId: getProjectPeriodReport
+      summary: Отчёт за период
+      description: Доступно роли TEAM_LEAD. Возвращает отчёт по проекту за обязательный период с опциональной фильтрацией по компоненту и релизу.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: from
+          in: query
+          required: true
+          description: Начало периода.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          description: Конец периода.
+          schema:
+            type: string
+            format: date
+        - name: componentId
+          in: query
+          required: false
+          description: Фильтр по компоненту.
+          schema:
+            type: string
+            format: uuid
+        - name: releaseId
+          in: query
+          required: false
+          description: Фильтр по релизу.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Отчёт за период.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeriodReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{projectId}/reports/export:
+    get:
+      tags: [Analytics]
+      operationId: exportProjectReport
+      summary: Экспорт отчёта за период
+      description: Доступно роли TEAM_LEAD. Экспортирует отчёт за обязательный период в выбранном формате.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: from
+          in: query
+          required: true
+          description: Начало периода.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          description: Конец периода.
+          schema:
+            type: string
+            format: date
+        - name: componentId
+          in: query
+          required: false
+          description: Фильтр по компоненту.
+          schema:
+            type: string
+            format: uuid
+        - name: releaseId
+          in: query
+          required: false
+          description: Фильтр по релизу.
+          schema:
+            type: string
+            format: uuid
+        - name: format
+          in: query
+          required: true
+          description: Формат экспорта.
+          schema:
+            $ref: "#/components/schemas/ReportExportFormat"
+      responses:
+        "200":
+          description: Отчёт в выбранном формате.
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeriodReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/analytics/summary:
+    get:
+      tags: [Analytics]
+      operationId: getSummaryAnalytics
+      summary: Сводная аналитика
+      description: Доступно роли OBSERVER и администратору (`isAdmin=true`). Возвращает сводную аналитику с опциональной фильтрацией по проекту и периоду.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          description: Фильтр по проекту.
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          description: Начало периода.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: Конец периода.
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Сводная аналитика.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SummaryAnalytics"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Номер страницы (начиная с 0).
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Size:
+      name: size
+      in: query
+      required: false
+      description: Размер страницы (от 1 до 100).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    UserIdPath:
+      name: userId
+      in: path
+      required: true
+      description: Идентификатор пользователя.
+      schema:
+        type: string
+        format: uuid
+    ProjectIdPath:
+      name: projectId
+      in: path
+      required: true
+      description: Идентификатор проекта.
+      schema:
+        type: string
+        format: uuid
+    MemberIdPath:
+      name: memberId
+      in: path
+      required: true
+      description: Идентификатор участника проекта.
+      schema:
+        type: string
+        format: uuid
+    InvitationIdPath:
+      name: invitationId
+      in: path
+      required: true
+      description: Идентификатор приглашения.
+      schema:
+        type: string
+        format: uuid
+    ComponentIdPath:
+      name: componentId
+      in: path
+      required: true
+      description: Идентификатор компонента.
+      schema:
+        type: string
+        format: uuid
+    LabelIdPath:
+      name: labelId
+      in: path
+      required: true
+      description: Идентификатор метки.
+      schema:
+        type: string
+        format: uuid
+    BugIdPath:
+      name: bugId
+      in: path
+      required: true
+      description: Идентификатор бага.
+      schema:
+        type: string
+        format: uuid
+    CommentIdPath:
+      name: commentId
+      in: path
+      required: true
+      description: Идентификатор комментария.
+      schema:
+        type: string
+        format: uuid
+    AttachmentIdPath:
+      name: attachmentId
+      in: path
+      required: true
+      description: Идентификатор вложения.
+      schema:
+        type: string
+        format: uuid
+    LinkIdPath:
+      name: linkId
+      in: path
+      required: true
+      description: Идентификатор связи.
+      schema:
+        type: string
+        format: uuid
+    ReleaseIdPath:
+      name: releaseId
+      in: path
+      required: true
+      description: Идентификатор релиза.
+      schema:
+        type: string
+        format: uuid
+    CommitLinkIdPath:
+      name: commitLinkId
+      in: path
+      required: true
+      description: Идентификатор связи коммита с багом.
+      schema:
+        type: string
+        format: uuid
+    NotificationIdPath:
+      name: notificationId
+      in: path
+      required: true
+      description: Идентификатор уведомления.
+      schema:
+        type: string
+        format: uuid
+    SubscriptionIdPath:
+      name: subscriptionId
+      in: path
+      required: true
+      description: Идентификатор подписки.
+      schema:
+        type: string
+        format: uuid
+    InvitationTokenPath:
+      name: token
+      in: path
+      required: true
+      description: Токен приглашения.
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Некорректный запрос.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Пользователь не авторизован.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Недостаточно прав.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Ресурс не найден.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Конфликт состояния ресурса.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    UnprocessableEntity:
+      description: Данные не могут быть обработаны.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    # ===== Common & Errors =====
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Health status
+        service:
+          type: string
+          description: Service name
+      required: [status, service]
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Response message
+      required: [message]
+
+    ErrorDetail:
+      type: object
+      properties:
+        field:
+          type: string
+          description: Field name
+        message:
+          type: string
+          description: Error message
+      required: [field, message]
+
+    ErrorResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: Error timestamp
+        status:
+          type: integer
+          description: HTTP status
+        error:
+          type: string
+          description: Error name
+        code:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Error message
+        path:
+          type: string
+          description: Request path
+        details:
+          type: array
+          description: Field errors
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+      required: [timestamp, status, error, code, message, path]
+
+    UserShort:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User ID
+        email:
+          type: string
+          format: email
+          description: User email
+        fullName:
+          type: string
+          description: Full name
+        avatarUrl:
+          type: ["string", "null"]
+          description: Avatar URL
+      required: [id, email, fullName]
+
+    # ===== Auth / Profile / Admin =====
+    UserStatus:
+      type: string
+      description: User status
+      enum: [ACTIVE, BLOCKED, DEACTIVATED]
+
+    ProjectRole:
+      type: string
+      description: Project role
+      enum: [TEAM_LEAD, DEVELOPER, TESTER, OBSERVER]
+
+    ProjectStatus:
+      type: string
+      description: Project status
+      enum: [ACTIVE, ARCHIVED]
+
+    InvitationStatus:
+      type: string
+      description: Invitation status
+      enum: [PENDING, ACCEPTED, CANCELLED, EXPIRED]
+
+    RegisterRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email
+        password:
+          type: string
+          minLength: 8
+          description: Account password
+        fullName:
+          type: string
+          description: Full name
+        invitationToken:
+          type: ["string", "null"]
+          description: Invitation token
+      required: [email, password, fullName]
+
+    VerifyEmailRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Verification token
+      required: [token]
+
+    ResendVerificationRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email
+      required: [email]
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email
+        password:
+          type: string
+          description: Account password
+      required: [email, password]
+
+    RefreshTokenRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+          description: Refresh token
+      required: [refreshToken]
+
+    LogoutRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: ["string", "null"]
+          description: Refresh token
+
+    PasswordResetRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email
+      required: [email]
+
+    PasswordResetConfirmRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Reset token
+        newPassword:
+          type: string
+          minLength: 8
+          description: New password
+      required: [token, newPassword]
+
+    ChangePasswordRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+          description: Current password
+        newPassword:
+          type: string
+          minLength: 8
+          description: New password
+      required: [currentPassword, newPassword]
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+          description: Full name
+        avatarUrl:
+          type: ["string", "null"]
+          description: Avatar URL
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User ID
+        email:
+          type: string
+          format: email
+          description: User email
+        fullName:
+          type: string
+          description: Full name
+        avatarUrl:
+          type: ["string", "null"]
+          description: Avatar URL
+        isAdmin:
+          type: boolean
+          description: Admin flag
+        emailVerified:
+          type: boolean
+          description: Email verified
+        status:
+          $ref: "#/components/schemas/UserStatus"
+        canCreateProjects:
+          type: boolean
+          description: Can create projects
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+        [
+          id,
+          email,
+          fullName,
+          isAdmin,
+          emailVerified,
+          status,
+          canCreateProjects,
+          createdAt,
+        ]
+
+    AuthTokensResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: Access token
+        refreshToken:
+          type: string
+          description: Refresh token
+        tokenType:
+          type: string
+          description: Token type
+        expiresIn:
+          type: integer
+          format: int64
+          description: Expiry seconds
+        user:
+          $ref: "#/components/schemas/UserProfile"
+      required: [accessToken, refreshToken, tokenType, expiresIn, user]
+
+    NotificationChannelConfig:
+      type: object
+      properties:
+        inApp:
+          type: boolean
+          description: In-app channel
+        email:
+          type: boolean
+          description: Email channel
+      required: [inApp, email]
+
+    NotificationSettings:
+      type: object
+      properties:
+        inAppEnabled:
+          type: boolean
+          description: In-app enabled
+        emailEnabled:
+          type: boolean
+          description: Email enabled
+        events:
+          type: object
+          description: Per-event settings
+          properties:
+            bugCreated:
+              $ref: "#/components/schemas/NotificationChannelConfig"
+            bugAssigned:
+              $ref: "#/components/schemas/NotificationChannelConfig"
+            bugStatusChanged:
+              $ref: "#/components/schemas/NotificationChannelConfig"
+            bugCommented:
+              $ref: "#/components/schemas/NotificationChannelConfig"
+            mention:
+              $ref: "#/components/schemas/NotificationChannelConfig"
+            projectInvited:
+              $ref: "#/components/schemas/NotificationChannelConfig"
+            releasePublished:
+              $ref: "#/components/schemas/NotificationChannelConfig"
+      required: [inAppEnabled, emailEnabled, events]
+
+    UserProjectMembership:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+          description: Project ID
+        projectName:
+          type: string
+          description: Project name
+        role:
+          $ref: "#/components/schemas/ProjectRole"
+        projectStatus:
+          $ref: "#/components/schemas/ProjectStatus"
+      required: [projectId, projectName, role, projectStatus]
+
+    AdminUserSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User ID
+        email:
+          type: string
+          format: email
+          description: User email
+        fullName:
+          type: string
+          description: Full name
+        isAdmin:
+          type: boolean
+          description: Admin flag
+        emailVerified:
+          type: boolean
+          description: Email verified
+        status:
+          $ref: "#/components/schemas/UserStatus"
+        projectsCount:
+          type: integer
+          description: Projects count
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+        [
+          id,
+          email,
+          fullName,
+          isAdmin,
+          emailVerified,
+          status,
+          projectsCount,
+          createdAt,
+        ]
+
+    PagedAdminUserSummary:
+      type: object
+      properties:
+        items:
+          type: array
+          description: Page items
+          items:
+            $ref: "#/components/schemas/AdminUserSummary"
+        page:
+          type: integer
+          description: Page number
+        size:
+          type: integer
+          description: Page size
+        totalElements:
+          type: integer
+          format: int64
+          description: Total elements
+        totalPages:
+          type: integer
+          description: Total pages
+      required: [items, page, size, totalElements, totalPages]
+
+    AdminUserDetails:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User ID
+        email:
+          type: string
+          format: email
+          description: User email
+        fullName:
+          type: string
+          description: Full name
+        avatarUrl:
+          type: ["string", "null"]
+          description: Avatar URL
+        isAdmin:
+          type: boolean
+          description: Admin flag
+        emailVerified:
+          type: boolean
+          description: Email verified
+        status:
+          $ref: "#/components/schemas/UserStatus"
+        canCreateProjects:
+          type: boolean
+          description: Can create projects
+        blockedReason:
+          type: ["string", "null"]
+          description: Block reason
+        projects:
+          type: array
+          description: Project memberships
+          items:
+            $ref: "#/components/schemas/UserProjectMembership"
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+        [
+          id,
+          email,
+          fullName,
+          isAdmin,
+          emailVerified,
+          status,
+          canCreateProjects,
+          projects,
+          createdAt,
+        ]
+
+    BlockUserRequest:
+      type: object
+      properties:
+        reason:
+          type: ["string", "null"]
+          description: Block reason
+
+    DeactivateUserRequest:
+      type: object
+      properties:
+        reason:
+          type: ["string", "null"]
+          description: Deactivation reason
+
+    AdminRoleRequest:
+      type: object
+      properties:
+        isAdmin:
+          type: boolean
+          description: Admin flag
+      required: [isAdmin]
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Entry ID
+        actor:
+          oneOf:
+            - $ref: "#/components/schemas/UserShort"
+            - type: "null"
+        action:
+          type: string
+          description: Action name
+        targetType:
+          type: string
+          description: Target type
+        targetId:
+          type: ["string", "null"]
+          format: uuid
+          description: Target ID
+        details:
+          type: object
+          description: Action details
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required: [id, action, targetType, createdAt]
+
+    PagedAuditLogEntry:
+      type: object
+      properties:
+        items:
+          type: array
+          description: Page items
+          items:
+            $ref: "#/components/schemas/AuditLogEntry"
+        page:
+          type: integer
+          description: Page number
+        size:
+          type: integer
+          description: Page size
+        totalElements:
+          type: integer
+          format: int64
+          description: Total elements
+        totalPages:
+          type: integer
+          description: Total pages
+      required: [items, page, size, totalElements, totalPages]
+
+    # ===== Projects / Team / Components / Labels =====
+    CreateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Project name
+        description:
+          type: ["string", "null"]
+          description: Project description
+        techStack:
+          type: ["string", "null"]
+          description: Technology stack
+        gitRepositoryUrl:
+          type: ["string", "null"]
+          format: uri
+          description: Git repository URL
+        startDate:
+          type: ["string", "null"]
+          format: date
+          description: Start date
+        endDate:
+          type: ["string", "null"]
+          format: date
+          description: End date
+      required: [name]
+
+    UpdateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Project name
+        description:
+          type: ["string", "null"]
+          description: Project description
+        techStack:
+          type: ["string", "null"]
+          description: Technology stack
+        startDate:
+          type: ["string", "null"]
+          format: date
+          description: Start date
+        endDate:
+          type: ["string", "null"]
+          format: date
+          description: End date
+
+    ProjectSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Project ID
+        name:
+          type: string
+          description: Project name
+        description:
+          type: ["string", "null"]
+          description: Project description
+        techStack:
+          type: ["string", "null"]
+          description: Technology stack
+        status:
+          $ref: "#/components/schemas/ProjectStatus"
+        bugTrackingEnabled:
+          type: boolean
+          description: Bug tracking flag
+        myRole:
+          $ref: "#/components/schemas/ProjectRole"
+        openBugsCount:
+          type: integer
+          description: Open bugs count
+        membersCount:
+          type: integer
+          description: Members count
+        startDate:
+          type: ["string", "null"]
+          format: date
+          description: Start date
+        endDate:
+          type: ["string", "null"]
+          format: date
+          description: End date
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+        [
+          id,
+          name,
+          status,
+          bugTrackingEnabled,
+          myRole,
+          openBugsCount,
+          membersCount,
+          createdAt,
+        ]
+
+    PagedProjectSummary:
+      type: object
+      properties:
+        items:
+          type: array
+          description: Page items
+          items:
+            $ref: "#/components/schemas/ProjectSummary"
+        page:
+          type: integer
+          description: Page number
+        size:
+          type: integer
+          description: Page size
+        totalElements:
+          type: integer
+          format: int64
+          description: Total elements
+        totalPages:
+          type: integer
+          description: Total pages
+      required: [items, page, size, totalElements, totalPages]
+
+    ProjectDetails:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Project ID
+        name:
+          type: string
+          description: Project name
+        description:
+          type: ["string", "null"]
+          description: Project description
+        techStack:
+          type: ["string", "null"]
+          description: Technology stack
+        status:
+          $ref: "#/components/schemas/ProjectStatus"
+        bugTrackingEnabled:
+          type: boolean
+          description: Bug tracking flag
+        hasActiveTester:
+          type: boolean
+          description: Active tester flag
+        owner:
+          $ref: "#/components/schemas/UserShort"
+        myRole:
+          $ref: "#/components/schemas/ProjectRole"
+        gitIntegration:
+          oneOf:
+            - $ref: "#/components/schemas/GitIntegrationResponse"
+            - type: "null"
+        startDate:
+          type: ["string", "null"]
+          format: date
+          description: Start date
+        endDate:
+          type: ["string", "null"]
+          format: date
+          description: End date
+        membersCount:
+          type: integer
+          description: Members count
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+        [
+          id,
+          name,
+          status,
+          bugTrackingEnabled,
+          hasActiveTester,
+          owner,
+          myRole,
+          membersCount,
+          createdAt,
+        ]
+
+    ProjectMember:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Member ID
+        user:
+          $ref: "#/components/schemas/UserShort"
+        role:
+          $ref: "#/components/schemas/ProjectRole"
+        status:
+          type: string
+          description: Member status
+          enum: [ACTIVE]
+        joinedAt:
+          type: string
+          format: date-time
+          description: Join timestamp
+      required: [id, user, role, status, joinedAt]
+
+    ProjectInvitation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Invitation ID
+        email:
+          type: string
+          format: email
+          description: Invitee email
+        role:
+          $ref: "#/components/schemas/ProjectRole"
+        status:
+          $ref: "#/components/schemas/InvitationStatus"
+        invitedBy:
+          $ref: "#/components/schemas/UserShort"
+        expiresAt:
+          type: string
+          format: date-time
+          description: Expiry timestamp
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required: [id, email, role, status, invitedBy, expiresAt, createdAt]
+
+    InvitationDetails:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+          description: Project ID
+        projectName:
+          type: string
+          description: Project name
+        email:
+          type: string
+          format: email
+          description: Invitee email
+        role:
+          $ref: "#/components/schemas/ProjectRole"
+        status:
+          $ref: "#/components/schemas/InvitationStatus"
+        expiresAt:
+          type: string
+          format: date-time
+          description: Expiry timestamp
+      required: [projectId, projectName, email, role, status, expiresAt]
+
+    ProjectTeamResponse:
+      type: object
+      properties:
+        members:
+          type: array
+          description: Project members
+          items:
+            $ref: "#/components/schemas/ProjectMember"
+        invitations:
+          type: array
+          description: Pending invitations
+          items:
+            $ref: "#/components/schemas/ProjectInvitation"
+        hasTeamLead:
+          type: boolean
+          description: Team lead flag
+        hasActiveTester:
+          type: boolean
+          description: Active tester flag
+        bugTrackingEnabled:
+          type: boolean
+          description: Bug tracking flag
+      required:
+        [members, invitations, hasTeamLead, hasActiveTester, bugTrackingEnabled]
+
+    AddProjectMemberRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: Member email
+        role:
+          $ref: "#/components/schemas/ProjectRole"
+      required: [email, role]
+
+    AddMemberResult:
+      type: object
+      properties:
+        outcome:
+          type: string
+          description: Add outcome
+          enum: [MEMBER_ADDED, INVITATION_SENT]
+        member:
+          oneOf:
+            - $ref: "#/components/schemas/ProjectMember"
+            - type: "null"
+        invitation:
+          oneOf:
+            - $ref: "#/components/schemas/ProjectInvitation"
+            - type: "null"
+      required: [outcome]
+
+    UpdateMemberRoleRequest:
+      type: object
+      properties:
+        role:
+          $ref: "#/components/schemas/ProjectRole"
+      required: [role]
+
+    TeamFinalizeResponse:
+      type: object
+      properties:
+        bugTrackingEnabled:
+          type: boolean
+          description: Bug tracking flag
+        hasActiveTester:
+          type: boolean
+          description: Active tester flag
+        warning:
+          type: ["string", "null"]
+          description: Finalize warning
+      required: [bugTrackingEnabled, hasActiveTester]
+
+    SoftwareComponent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Component ID
+        projectId:
+          type: string
+          format: uuid
+          description: Project ID
+        name:
+          type: string
+          description: Component name
+        description:
+          type: ["string", "null"]
+          description: Component description
+        ownerDeveloper:
+          oneOf:
+            - $ref: "#/components/schemas/UserShort"
+            - type: "null"
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required: [id, projectId, name, createdAt]
+
+    CreateComponentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Component name
+        description:
+          type: ["string", "null"]
+          description: Component description
+        ownerDeveloperId:
+          type: ["string", "null"]
+          format: uuid
+          description: Owner developer ID
+      required: [name]
+
+    UpdateComponentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Component name
+        description:
+          type: ["string", "null"]
+          description: Component description
+        ownerDeveloperId:
+          type: ["string", "null"]
+          format: uuid
+          description: Owner developer ID
+
+    Label:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Label ID
+        projectId:
+          type: string
+          format: uuid
+          description: Project ID
+        name:
+          type: string
+          description: Label name
+        color:
+          type: ["string", "null"]
+          description: Label color
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required: [id, projectId, name, createdAt]
+
+    CreateLabelRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Label name
+        color:
+          type: ["string", "null"]
+          description: Label color
+      required: [name]
+
+    UpdateLabelRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Label name
+        color:
+          type: ["string", "null"]
+          description: Label color
+
+    MergeLabelsRequest:
+      type: object
+      properties:
+        sourceLabelIds:
+          type: array
+          description: Source label IDs
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+        targetLabelId:
+          type: string
+          format: uuid
+          description: Target label ID
+      required: [sourceLabelIds, targetLabelId]
+
+    # ===== Bugs / Planning / Comments / Attachments / Links / History =====
+    BugStatus:
+      type: string
+      description: Bug status
+      enum:
+        [
+          NEW,
+          PLANNED,
+          IN_PROGRESS,
+          NEEDS_INFO,
+          IN_REVIEW,
+          RETURNED,
+          CLOSED,
+          REOPENED,
+        ]
+
+    BugPriority:
+      type: string
+      description: Bug priority
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+
+    BugResolution:
+      type: string
+      description: Bug resolution
+      enum: [FIXED, NOT_A_BUG, DUPLICATE, CANNOT_REPRODUCE]
+
+    BugLinkType:
+      type: string
+      description: Bug link type
+      enum: [DUPLICATES, BLOCKS, RELATES_TO]
+
+    ReleaseStatus:
+      type: string
+      description: Release status
+      enum: [PLANNED, RELEASED]
+
+    ReleaseShort:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Release ID
+        version:
+          type: string
+          description: Release version
+        name:
+          type: ["string", "null"]
+          description: Release name
+        status:
+          $ref: "#/components/schemas/ReleaseStatus"
+      required: [id, version, status]
+
+    FixPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Fix plan ID
+        priority:
+          $ref: "#/components/schemas/BugPriority"
+        priorityChangeReason:
+          type: ["string", "null"]
+          description: Priority change reason
+        deadline:
+          type: ["string", "null"]
+          format: date-time
+          description: Fix deadline
+        rationale:
+          type: ["string", "null"]
+          description: Planning rationale
+        targetRelease:
+          oneOf:
+            - $ref: "#/components/schemas/ReleaseShort"
+            - type: "null"
+        plannedBy:
+          $ref: "#/components/schemas/UserShort"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required: [id, priority, plannedBy, updatedAt]
+
+    BugSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Bug ID
+        projectId:
+          type: string
+          format: uuid
+          description: Project ID
+        key:
+          type: string
+          description: Bug key
+        title:
+          type: string
+          description: Bug title
+        status:
+          $ref: "#/components/schemas/BugStatus"
+        priority:
+          $ref: "#/components/schemas/BugPriority"
+        recommendedPriority:
+          $ref: "#/components/schemas/BugPriority"
+        resolution:
+          oneOf:
+            - $ref: "#/components/schemas/BugResolution"
+            - type: "null"
+        author:
+          $ref: "#/components/schemas/UserShort"
+        assignee:
+          oneOf:
+            - $ref: "#/components/schemas/UserShort"
+            - type: "null"
+        component:
+          oneOf:
+            - $ref: "#/components/schemas/SoftwareComponent"
+            - type: "null"
+        labels:
+          type: array
+          description: Bug labels
+          items:
+            $ref: "#/components/schemas/Label"
+        targetRelease:
+          oneOf:
+            - $ref: "#/components/schemas/ReleaseShort"
+            - type: "null"
+        deadline:
+          type: ["string", "null"]
+          format: date-time
+          description: Fix deadline
+        overdue:
+          type: boolean
+          description: Overdue flag
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+        [
+          id,
+          projectId,
+          key,
+          title,
+          status,
+          priority,
+          recommendedPriority,
+          author,
+          labels,
+          overdue,
+          createdAt,
+          updatedAt,
+        ]
+
+    PagedBugSummary:
+      type: object
+      properties:
+        items:
+          type: array
+          description: Page items
+          items:
+            $ref: "#/components/schemas/BugSummary"
+        page:
+          type: integer
+          description: Page number
+        size:
+          type: integer
+          description: Page size
+        totalElements:
+          type: integer
+          format: int64
+          description: Total elements
+        totalPages:
+          type: integer
+          description: Total pages
+      required: [items, page, size, totalElements, totalPages]
+
+    BugLink:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Link ID
+        linkType:
+          $ref: "#/components/schemas/BugLinkType"
+        targetBugId:
+          type: string
+          format: uuid
+          description: Target bug ID
+        targetBugKey:
+          type: string
+          description: Target bug key
+        targetBugTitle:
+          type: string
+          description: Target bug title
+        targetBugStatus:
+          $ref: "#/components/schemas/BugStatus"
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+        [
+          id,
+          linkType,
+          targetBugId,
+          targetBugKey,
+          targetBugTitle,
+          targetBugStatus,
+          createdAt,
+        ]
+
+    BugDetails:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Bug ID
+        projectId:
+          type: string
+          format: uuid
+          description: Project ID
+        key:
+          type: string
+          description: Bug key
+        title:
+          type: string
+          description: Bug title
+        description:
+          type: string
+          description: Bug description
+        stepsToReproduce:
+          type: string
+          description: Reproduction steps
+        environment:
+          type: string
+          description: Environment info
+        expectedResult:
+          type: ["string", "null"]
+          description: Expected result
+        actualResult:
+          type: ["string", "null"]
+          description: Actual result
+        status:
+          $ref: "#/components/schemas/BugStatus"
+        priority:
+          $ref: "#/components/schemas/BugPriority"
+        recommendedPriority:
+          $ref: "#/components/schemas/BugPriority"
+        resolution:
+          oneOf:
+            - $ref: "#/components/schemas/BugResolution"
+            - type: "null"
+        author:
+          $ref: "#/components/schemas/UserShort"
+        assignee:
+          oneOf:
+            - $ref: "#/components/schemas/UserShort"
+            - type: "null"
+        component:
+          oneOf:
+            - $ref: "#/components/schemas/SoftwareComponent"
+            - type: "null"
+        labels:
+          type: array
+          description: Bug labels
+          items:
+            $ref: "#/components/schemas/Label"
+        fixPlan:
+          oneOf:
+            - $ref: "#/components/schemas/FixPlan"
+            - type: "null"
+        targetRelease:
+          oneOf:
+            - $ref: "#/components/schemas/ReleaseShort"
+            - type: "null"
+        fixedInRelease:
+          oneOf:
+            - $ref: "#/components/schemas/ReleaseShort"
+            - type: "null"
+        commits:
+          type: array
+          description: Linked commits
+          items:
+            $ref: "#/components/schemas/LinkedCommit"
+        links:
+          type: array
+          description: Bug links
+          items:
+            $ref: "#/components/schemas/BugLink"
+        commentsCount:
+          type: integer
+          description: Comments count
+        attachmentsCount:
+          type: integer
+          description: Attachments count
+        deadline:
+          type: ["string", "null"]
+          format: date-time
+          description: Fix deadline
+        overdue:
+          type: boolean
+          description: Overdue flag
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+        [
+          id,
+          projectId,
+          key,
+          title,
+          description,
+          stepsToReproduce,
+          environment,
+          status,
+          priority,
+          recommendedPriority,
+          author,
+          labels,
+          commits,
+          links,
+          commentsCount,
+          attachmentsCount,
+          overdue,
+          createdAt,
+          updatedAt,
+        ]
+
+    CreateBugRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Bug title
+        description:
+          type: string
+          description: Bug description
+        stepsToReproduce:
+          type: string
+          description: Reproduction steps
+        environment:
+          type: string
+          description: Environment info
+        expectedResult:
+          type: ["string", "null"]
+          description: Expected result
+        actualResult:
+          type: ["string", "null"]
+          description: Actual result
+        recommendedPriority:
+          $ref: "#/components/schemas/BugPriority"
+        componentId:
+          type: ["string", "null"]
+          format: uuid
+          description: Component ID
+        labelIds:
+          type: array
+          description: Label IDs
+          items:
+            type: string
+            format: uuid
+        newLabels:
+          type: array
+          description: New label names
+          items:
+            type: string
+      required:
+        [title, description, stepsToReproduce, environment, recommendedPriority]
+
+    UpdateBugRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Bug title
+        description:
+          type: string
+          description: Bug description
+        stepsToReproduce:
+          type: string
+          description: Reproduction steps
+        environment:
+          type: string
+          description: Environment info
+        expectedResult:
+          type: ["string", "null"]
+          description: Expected result
+        actualResult:
+          type: ["string", "null"]
+          description: Actual result
+        componentId:
+          type: ["string", "null"]
+          format: uuid
+          description: Component ID
+        labelIds:
+          type: array
+          description: Label IDs
+          items:
+            type: string
+            format: uuid
+        newLabels:
+          type: array
+          description: New label names
+          items:
+            type: string
+
+    RequestClarificationRequest:
+      type: object
+      properties:
+        question:
+          type: string
+          description: Clarification question
+      required: [question]
+
+    ClarifyBugRequest:
+      type: object
+      properties:
+        stepsToReproduce:
+          type: ["string", "null"]
+          description: Reproduction steps
+        environment:
+          type: ["string", "null"]
+          description: Environment info
+        comment:
+          type: string
+          description: Clarification comment
+      required: [comment]
+
+    CommitReferenceInput:
+      type: object
+      properties:
+        commitHash:
+          type: ["string", "null"]
+          description: Commit hash
+        mergeRequestUrl:
+          type: ["string", "null"]
+          format: uri
+          description: Merge request URL
+
+    FixBugRequest:
+      type: object
+      properties:
+        commits:
+          type: array
+          description: Commit references
+          items:
+            $ref: "#/components/schemas/CommitReferenceInput"
+        comment:
+          type: ["string", "null"]
+          description: Fix comment
+
+    VerifyBugRequest:
+      type: object
+      properties:
+        decision:
+          type: string
+          description: Verification decision
+          enum: [CONFIRM, RETURN]
+        fixedInReleaseId:
+          type: ["string", "null"]
+          format: uuid
+          description: Fixed release ID
+        comment:
+          type: ["string", "null"]
+          description: Verification comment
+      required: [decision]
+
+    CloseWithoutFixRequest:
+      type: object
+      properties:
+        resolution:
+          type: string
+          description: Close resolution
+          enum: [NOT_A_BUG, DUPLICATE, CANNOT_REPRODUCE]
+        duplicateOfBugId:
+          type: ["string", "null"]
+          format: uuid
+          description: Duplicate bug ID
+        comment:
+          type: ["string", "null"]
+          description: Close comment
+      required: [resolution]
+
+    ReopenBugRequest:
+      type: object
+      properties:
+        releaseId:
+          type: ["string", "null"]
+          format: uuid
+          description: Found-in release ID
+        comment:
+          type: string
+          description: Reopen comment
+      required: [comment]
+
+    FixPlanRequest:
+      type: object
+      properties:
+        priority:
+          $ref: "#/components/schemas/BugPriority"
+        priorityChangeReason:
+          type: ["string", "null"]
+          description: Priority change reason
+        deadline:
+          type: ["string", "null"]
+          format: date-time
+          description: Fix deadline
+        assigneeId:
+          type: ["string", "null"]
+          format: uuid
+          description: Assignee ID
+        targetReleaseId:
+          type: ["string", "null"]
+          format: uuid
+          description: Target release ID
+        rationale:
+          type: string
+          description: Planning rationale
+      required: [priority, rationale]
+
+    AssignBugRequest:
+      type: object
+      properties:
+        assigneeId:
+          type: string
+          format: uuid
+          description: Assignee ID
+      required: [assigneeId]
+
+    Attachment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Attachment ID
+        bugId:
+          type: string
+          format: uuid
+          description: Bug ID
+        commentId:
+          type: ["string", "null"]
+          format: uuid
+          description: Comment ID
+        fileName:
+          type: string
+          description: File name
+        contentType:
+          type: string
+          description: MIME type
+        sizeBytes:
+          type: integer
+          format: int64
+          description: File size
+        uploadedBy:
+          $ref: "#/components/schemas/UserShort"
+        createdAt:
+          type: string
+          format: date-time
+          description: Upload timestamp
+      required:
+        [id, bugId, fileName, contentType, sizeBytes, uploadedBy, createdAt]
+
+    UploadAttachmentRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+          description: File to upload
+        commentId:
+          type: ["string", "null"]
+          format: uuid
+          description: Comment ID
+      required: [file]
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Comment ID
+        bugId:
+          type: string
+          format: uuid
+          description: Bug ID
+        author:
+          $ref: "#/components/schemas/UserShort"
+        text:
+          type: string
+          description: Comment text
+        attachments:
+          type: array
+          description: Comment attachments
+          items:
+            $ref: "#/components/schemas/Attachment"
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required: [id, bugId, author, text, attachments, createdAt, updatedAt]
+
+    PagedComment:
+      type: object
+      properties:
+        items:
+          type: array
+          description: Page items
+          items:
+            $ref: "#/components/schemas/Comment"
+        page:
+          type: integer
+          description: Page number
+        size:
+          type: integer
+          description: Page size
+        totalElements:
+          type: integer
+          format: int64
+          description: Total elements
+        totalPages:
+          type: integer
+          description: Total pages
+      required: [items, page, size, totalElements, totalPages]
+
+    CreateCommentRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          description: Comment text
+      required: [text]
+
+    UpdateCommentRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          description: Comment text
+      required: [text]
+
+    CreateBugLinkRequest:
+      type: object
+      properties:
+        targetBugId:
+          type: string
+          format: uuid
+          description: Target bug ID
+        linkType:
+          $ref: "#/components/schemas/BugLinkType"
+      required: [targetBugId, linkType]
+
+    BugHistoryEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: History entry ID
+        bugId:
+          type: string
+          format: uuid
+          description: Bug ID
+        actor:
+          $ref: "#/components/schemas/UserShort"
+        fieldName:
+          type: string
+          description: Changed field
+        oldValue:
+          type: ["string", "null"]
+          description: Previous value
+        newValue:
+          type: ["string", "null"]
+          description: New value
+        createdAt:
+          type: string
+          format: date-time
+          description: Change timestamp
+      required: [id, bugId, actor, fieldName, createdAt]
+
+    PagedBugHistoryEntry:
+      type: object
+      properties:
+        items:
+          type: array
+          description: Page items
+          items:
+            $ref: "#/components/schemas/BugHistoryEntry"
+        page:
+          type: integer
+          description: Page number
+        size:
+          type: integer
+          description: Page size
+        totalElements:
+          type: integer
+          format: int64
+          description: Total elements
+        totalPages:
+          type: integer
+          description: Total pages
+      required: [items, page, size, totalElements, totalPages]
+
+    # ===== Releases / Git =====
+    ReleaseSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Release ID
+        projectId:
+          type: string
+          format: uuid
+          description: Project ID
+        version:
+          type: string
+          description: Release version
+        name:
+          type: ["string", "null"]
+          description: Release name
+        status:
+          $ref: "#/components/schemas/ReleaseStatus"
+        plannedDate:
+          type: ["string", "null"]
+          format: date
+          description: Planned date
+        releasedAt:
+          type: ["string", "null"]
+          format: date-time
+          description: Release timestamp
+        bugsCount:
+          type: integer
+          description: Bugs count
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required: [id, projectId, version, status, bugsCount, createdAt]
+
+    PagedReleaseSummary:
+      type: object
+      properties:
+        items:
+          type: array
+          description: Page items
+          items:
+            $ref: "#/components/schemas/ReleaseSummary"
+        page:
+          type: integer
+          description: Page number
+        size:
+          type: integer
+          description: Page size
+        totalElements:
+          type: integer
+          format: int64
+          description: Total elements
+        totalPages:
+          type: integer
+          description: Total pages
+      required: [items, page, size, totalElements, totalPages]
+
+    ReleaseDetails:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Release ID
+        projectId:
+          type: string
+          format: uuid
+          description: Project ID
+        version:
+          type: string
+          description: Release version
+        name:
+          type: ["string", "null"]
+          description: Release name
+        description:
+          type: ["string", "null"]
+          description: Release description
+        releaseNotes:
+          type: ["string", "null"]
+          description: Release notes
+        status:
+          $ref: "#/components/schemas/ReleaseStatus"
+        plannedDate:
+          type: ["string", "null"]
+          format: date
+          description: Planned date
+        releasedAt:
+          type: ["string", "null"]
+          format: date-time
+          description: Release timestamp
+        bugsCount:
+          type: integer
+          description: Bugs count
+        bugs:
+          type: array
+          description: Release bugs
+          items:
+            $ref: "#/components/schemas/BugSummary"
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+        [id, projectId, version, status, bugsCount, bugs, createdAt, updatedAt]
+
+    CreateReleaseRequest:
+      type: object
+      properties:
+        version:
+          type: string
+          description: Release version
+        name:
+          type: ["string", "null"]
+          description: Release name
+        description:
+          type: ["string", "null"]
+          description: Release description
+        plannedDate:
+          type: ["string", "null"]
+          format: date
+          description: Planned date
+        bugIds:
+          type: array
+          description: Bug IDs
+          items:
+            type: string
+            format: uuid
+      required: [version]
+
+    UpdateReleaseRequest:
+      type: object
+      properties:
+        version:
+          type: string
+          description: Release version
+        name:
+          type: ["string", "null"]
+          description: Release name
+        description:
+          type: ["string", "null"]
+          description: Release description
+        plannedDate:
+          type: ["string", "null"]
+          format: date
+          description: Planned date
+
+    SetReleaseBugsRequest:
+      type: object
+      properties:
+        bugIds:
+          type: array
+          description: Bug IDs
+          items:
+            type: string
+            format: uuid
+      required: [bugIds]
+
+    PublishReleaseRequest:
+      type: object
+      properties:
+        releaseNotes:
+          type: ["string", "null"]
+          description: Release notes
+
+    GitProvider:
+      type: string
+      description: Git provider
+      enum: [GITHUB, GITLAB, CUSTOM]
+
+    GitCommitType:
+      type: string
+      description: Git commit type
+      enum: [COMMIT, MERGE_REQUEST]
+
+    GitIntegrationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Integration ID
+        projectId:
+          type: string
+          format: uuid
+          description: Project ID
+        repositoryUrl:
+          type: string
+          format: uri
+          description: Repository URL
+        provider:
+          $ref: "#/components/schemas/GitProvider"
+        defaultBranch:
+          type: ["string", "null"]
+          description: Default branch
+        hasAccessToken:
+          type: boolean
+          description: Token configured
+        connected:
+          type: boolean
+          description: Connection status
+        lastSyncedAt:
+          type: ["string", "null"]
+          format: date-time
+          description: Last sync timestamp
+      required:
+        [id, projectId, repositoryUrl, provider, hasAccessToken, connected]
+
+    UpsertGitIntegrationRequest:
+      type: object
+      properties:
+        repositoryUrl:
+          type: string
+          format: uri
+          description: Repository URL
+        provider:
+          $ref: "#/components/schemas/GitProvider"
+        accessToken:
+          type: ["string", "null"]
+          writeOnly: true
+          description: Access token
+        defaultBranch:
+          type: ["string", "null"]
+          description: Default branch
+      required: [repositoryUrl, provider]
+
+    GitSyncRequest:
+      type: object
+      properties:
+        branch:
+          type: ["string", "null"]
+          description: Branch to sync
+        since:
+          type: ["string", "null"]
+          format: date-time
+          description: Sync start time
+
+    GitSyncResult:
+      type: object
+      properties:
+        syncedCommitsCount:
+          type: integer
+          description: Synced commits
+        syncedMergeRequestsCount:
+          type: integer
+          description: Synced merge requests
+        syncedAt:
+          type: string
+          format: date-time
+          description: Sync timestamp
+      required: [syncedCommitsCount, syncedMergeRequestsCount, syncedAt]
+
+    GitCommitInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Commit ID
+        type:
+          $ref: "#/components/schemas/GitCommitType"
+        commitHash:
+          type: ["string", "null"]
+          description: Commit hash
+        mergeRequestUrl:
+          type: ["string", "null"]
+          format: uri
+          description: Merge request URL
+        title:
+          type: ["string", "null"]
+          description: Commit title
+        authorName:
+          type: string
+          description: Author name
+        committedAt:
+          type: string
+          format: date-time
+          description: Commit timestamp
+        branch:
+          type: ["string", "null"]
+          description: Branch name
+      required: [id, type, authorName, committedAt]
+
+    PagedGitCommitInfo:
+      type: object
+      properties:
+        items:
+          type: array
+          description: Page items
+          items:
+            $ref: "#/components/schemas/GitCommitInfo"
+        page:
+          type: integer
+          description: Page number
+        size:
+          type: integer
+          description: Page size
+        totalElements:
+          type: integer
+          format: int64
+          description: Total elements
+        totalPages:
+          type: integer
+          description: Total pages
+      required: [items, page, size, totalElements, totalPages]
+
+    LinkCommitRequest:
+      type: object
+      properties:
+        commitHash:
+          type: ["string", "null"]
+          description: Commit hash
+        mergeRequestUrl:
+          type: ["string", "null"]
+          format: uri
+          description: Merge request URL
+
+    LinkedCommit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Link ID
+        bugId:
+          type: string
+          format: uuid
+          description: Bug ID
+        type:
+          $ref: "#/components/schemas/GitCommitType"
+        commitHash:
+          type: ["string", "null"]
+          description: Commit hash
+        mergeRequestUrl:
+          type: ["string", "null"]
+          format: uri
+          description: Merge request URL
+        authorName:
+          type: ["string", "null"]
+          description: Author name
+        committedAt:
+          type: ["string", "null"]
+          format: date-time
+          description: Commit timestamp
+        linkedBy:
+          $ref: "#/components/schemas/UserShort"
+        linkedAt:
+          type: string
+          format: date-time
+          description: Link timestamp
+      required: [id, bugId, type, linkedBy, linkedAt]
+
+    # ===== Notifications / Analytics =====
+    NotificationTargetType:
+      type: string
+      description: Notification target
+      enum: [PROJECT, BUG]
+
+    NotificationItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Notification ID
+        eventType:
+          type: string
+          description: Event type
+        title:
+          type: string
+          description: Notification title
+        message:
+          type: string
+          description: Notification message
+        projectId:
+          type: ["string", "null"]
+          format: uuid
+          description: Project ID
+        bugId:
+          type: ["string", "null"]
+          format: uuid
+          description: Bug ID
+        read:
+          type: boolean
+          description: Read flag
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required: [id, eventType, title, message, read, createdAt]
+
+    PagedNotification:
+      type: object
+      properties:
+        items:
+          type: array
+          description: Page items
+          items:
+            $ref: "#/components/schemas/NotificationItem"
+        page:
+          type: integer
+          description: Page number
+        size:
+          type: integer
+          description: Page size
+        totalElements:
+          type: integer
+          format: int64
+          description: Total elements
+        totalPages:
+          type: integer
+          description: Total pages
+        unreadCount:
+          type: integer
+          format: int64
+          description: Unread count
+      required: [items, page, size, totalElements, totalPages, unreadCount]
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Subscription ID
+        targetType:
+          $ref: "#/components/schemas/NotificationTargetType"
+        targetId:
+          type: string
+          format: uuid
+          description: Target ID
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required: [id, targetType, targetId, createdAt]
+
+    CreateSubscriptionRequest:
+      type: object
+      properties:
+        targetType:
+          $ref: "#/components/schemas/NotificationTargetType"
+        targetId:
+          type: string
+          format: uuid
+          description: Target ID
+      required: [targetType, targetId]
+
+    ReportExportFormat:
+      type: string
+      description: Report format
+      enum: [CSV, PDF, JSON]
+
+    NamedCount:
+      type: object
+      properties:
+        key:
+          type: string
+          description: Grouping key
+        label:
+          type: string
+          description: Display label
+        count:
+          type: integer
+          format: int64
+          description: Item count
+      required: [key, label, count]
+
+    ProjectDashboard:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+          description: Project ID
+        totalBugs:
+          type: integer
+          format: int64
+          description: Total bugs
+        openBugs:
+          type: integer
+          format: int64
+          description: Open bugs
+        overdueBugs:
+          type: integer
+          format: int64
+          description: Overdue bugs
+        byStatus:
+          type: array
+          description: Bugs by status
+          items:
+            $ref: "#/components/schemas/NamedCount"
+        byPriority:
+          type: array
+          description: Bugs by priority
+          items:
+            $ref: "#/components/schemas/NamedCount"
+        byComponent:
+          type: array
+          description: Bugs by component
+          items:
+            $ref: "#/components/schemas/NamedCount"
+        byAssignee:
+          type: array
+          description: Bugs by assignee
+          items:
+            $ref: "#/components/schemas/NamedCount"
+      required:
+        [
+          projectId,
+          totalBugs,
+          openBugs,
+          overdueBugs,
+          byStatus,
+          byPriority,
+          byComponent,
+          byAssignee,
+        ]
+
+    TrendPoint:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          description: Trend date
+        createdCount:
+          type: integer
+          format: int64
+          description: Created bugs
+        closedCount:
+          type: integer
+          format: int64
+          description: Closed bugs
+      required: [date, createdCount, closedCount]
+
+    ProjectMetrics:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+          description: Project ID
+        from:
+          type: ["string", "null"]
+          format: date
+          description: Period start
+        to:
+          type: ["string", "null"]
+          format: date
+          description: Period end
+        avgResolutionTimeHours:
+          type: ["number", "null"]
+          description: Avg resolution hours
+        avgVerificationTimeHours:
+          type: ["number", "null"]
+          description: Avg verification hours
+        reopenRate:
+          type: number
+          description: Reopen rate
+        createdVsClosedTrend:
+          type: array
+          description: Created vs closed
+          items:
+            $ref: "#/components/schemas/TrendPoint"
+      required: [projectId, reopenRate, createdVsClosedTrend]
+
+    PeriodReport:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+          description: Project ID
+        projectName:
+          type: string
+          description: Project name
+        from:
+          type: string
+          format: date
+          description: Period start
+        to:
+          type: string
+          format: date
+          description: Period end
+        createdCount:
+          type: integer
+          format: int64
+          description: Created bugs
+        closedCount:
+          type: integer
+          format: int64
+          description: Closed bugs
+        reopenedCount:
+          type: integer
+          format: int64
+          description: Reopened bugs
+        byStatus:
+          type: array
+          description: Bugs by status
+          items:
+            $ref: "#/components/schemas/NamedCount"
+        byPriority:
+          type: array
+          description: Bugs by priority
+          items:
+            $ref: "#/components/schemas/NamedCount"
+        bugs:
+          type: array
+          description: Report bugs
+          items:
+            $ref: "#/components/schemas/BugSummary"
+      required:
+        [
+          projectId,
+          projectName,
+          from,
+          to,
+          createdCount,
+          closedCount,
+          reopenedCount,
+          byStatus,
+          byPriority,
+          bugs,
+        ]
+
+    ProjectAnalyticsBrief:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+          description: Project ID
+        projectName:
+          type: string
+          description: Project name
+        totalBugs:
+          type: integer
+          format: int64
+          description: Total bugs
+        openBugs:
+          type: integer
+          format: int64
+          description: Open bugs
+        closedBugs:
+          type: integer
+          format: int64
+          description: Closed bugs
+        overdueBugs:
+          type: integer
+          format: int64
+          description: Overdue bugs
+        reopenRate:
+          type: number
+          description: Reopen rate
+      required:
+        [
+          projectId,
+          projectName,
+          totalBugs,
+          openBugs,
+          closedBugs,
+          overdueBugs,
+          reopenRate,
+        ]
+
+    SummaryAnalytics:
+      type: object
+      properties:
+        totalProjects:
+          type: integer
+          format: int64
+          description: Total projects
+        totalBugs:
+          type: integer
+          format: int64
+          description: Total bugs
+        openBugs:
+          type: integer
+          format: int64
+          description: Open bugs
+        closedBugs:
+          type: integer
+          format: int64
+          description: Closed bugs
+        overdueBugs:
+          type: integer
+          format: int64
+          description: Overdue bugs
+        avgResolutionTimeHours:
+          type: ["number", "null"]
+          description: Avg resolution hours
+        projects:
+          type: array
+          description: Project briefs
+          items:
+            $ref: "#/components/schemas/ProjectAnalyticsBrief"
+      required:
+        [totalProjects, totalBugs, openBugs, closedBugs, overdueBugs, projects]
