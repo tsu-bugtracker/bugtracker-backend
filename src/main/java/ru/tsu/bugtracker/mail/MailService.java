@@ -48,30 +48,30 @@ public class MailService {
 
     public void sendVerificationEmail(String to, String fullName, String token) {
         String link = frontendUrl + "/verify-email?token=" + token;
-        String subject = "Подтверждение адреса электронной почты";
-        String body = "Здравствуйте, " + fullName + "!\n\n"
-                + "Для подтверждения адреса электронной почты перейдите по ссылке:\n"
+        String subject = "Verify your email address";
+        String body = "Hello, " + fullName + "!\n\n"
+                + "To verify your email address, follow the link below:\n"
                 + link + "\n\n"
-                + "Если вы не регистрировались в BugTracker, просто проигнорируйте это письмо.";
+                + "If you did not sign up for BugTracker, you can safely ignore this email.";
         sendEmail(to, subject, body);
     }
 
     public void sendPasswordResetEmail(String to, String fullName, String token) {
         String link = frontendUrl + "/reset-password?token=" + token;
-        String subject = "Сброс пароля";
-        String body = "Здравствуйте, " + fullName + "!\n\n"
-                + "Для сброса пароля перейдите по ссылке:\n"
+        String subject = "Reset your password";
+        String body = "Hello, " + fullName + "!\n\n"
+                + "To reset your password, follow the link below:\n"
                 + link + "\n\n"
-                + "Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо.";
+                + "If you did not request a password reset, you can safely ignore this email.";
         sendEmail(to, subject, body);
     }
 
     public void sendProjectInvitationEmail(String to, String projectName, String inviterName, String token) {
         String link = frontendUrl + "/invitations/" + token;
-        String subject = "Приглашение в проект \"" + projectName + "\"";
-        String body = "Здравствуйте!\n\n"
-                + inviterName + " приглашает вас присоединиться к проекту \"" + projectName + "\" в BugTracker.\n"
-                + "Чтобы принять приглашение, перейдите по ссылке:\n"
+        String subject = "Invitation to project \"" + projectName + "\"";
+        String body = "Hello!\n\n"
+                + inviterName + " invites you to join the project \"" + projectName + "\" on BugTracker.\n"
+                + "To accept the invitation, follow the link below:\n"
                 + link;
         sendEmail(to, subject, body);
     }

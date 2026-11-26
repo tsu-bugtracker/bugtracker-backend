@@ -15,6 +15,7 @@ public class HealthController {
 
 	@GetMapping
 	@Operation(summary = "Check service health", description = "Returns the current status of the backend service")
+	@io.swagger.v3.oas.annotations.security.SecurityRequirements
 	public Map<String, String> health() {
 		return Map.of(
 			"status", "UP",

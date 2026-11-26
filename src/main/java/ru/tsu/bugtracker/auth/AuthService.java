@@ -98,18 +98,18 @@ public class AuthService {
 	public MessageResponse register(RegisterRequest request) {
 		String email = request.email().trim().toLowerCase(Locale.ROOT);
 		if (userRepository.existsByEmailIgnoreCase(email)) {
-			throw new ConflictException("Пользователь с таким email уже зарегистрирован");
+			throw new ConflictException("A user with this email is already registered");
 		}
 
 		String invitationToken = request.invitationToken();
 		if (invitationToken != null && !invitationToken.isBlank()) {
 			ProjectInvitation invitation = projectInvitationRepository
 					.findByTokenHash(TokenHashUtil.sha256Hex(invitationToken.trim()))
-					.orElseThrow(() -> new ConflictException("Приглашение не найдено или недействительно"));
+					.orElseThrow(() -> new ConflictException("Invitation not found or invalid"));
 			if (invitation.getStatus() != InvitationStatus.PENDING
 					|| invitation.getExpiresAt().isBefore(Instant.now())
 					|| !invitation.getEmail().equalsIgnoreCase(email)) {
-				throw new ConflictException("Приглашение не найдено или недействительно");
+				throw new ConflictException("Invitation not found or invalid");
 			}
 		}
 
@@ -134,7 +134,7 @@ public class AuthService {
 
 		auditService.log(user, "USER_REGISTERED", "USER", user.getId(), Map.of());
 
-		return new MessageResponse("Регистрация прошла успешно. Проверьте почту для подтверждения email.");
+		return new MessageResponse("Registration successful. Check your inbox to verify your email.");
 	}
 
 	/**
@@ -145,9 +145,9 @@ public class AuthService {
 		EmailVerificationToken token = emailVerificationTokenRepository
 				.findByTokenHash(TokenHashUtil.sha256Hex(request.token().trim()))
 				.orElseThrow(() -> new UnprocessableEntityException(
-						"Токен подтверждения недействителен или истёк"));
+						"Verification token is invalid or has expired"));
 		if (token.getUsedAt() != null || token.getExpiresAt().isBefore(now)) {
-			throw new UnprocessableEntityException("Токен подтверждения недействителен или истёк");
+			throw new UnprocessableEntityException("Verification token is invalid or has expired");
 		}
 
 		token.setUsedAt(now);
@@ -177,7 +177,7 @@ public class AuthService {
 
 		auditService.log(user, "EMAIL_VERIFIED", "USER", user.getId(), Map.of());
 
-		return new MessageResponse("Email успешно подтверждён");
+		return new MessageResponse("Email verified successfully");
 	}
 
 	/**
@@ -197,14 +197,14 @@ public class AuthService {
 						if (lastToken.getCreatedAt() != null
 								&& lastToken.getCreatedAt().isAfter(now.minusSeconds(RESEND_COOLDOWN_SECONDS))) {
 							throw new ConflictException(
-									"Повторная отправка письма возможна не чаще одного раза в минуту");
+									"A verification email can be resent at most once per minute");
 						}
 					});
 			sendVerificationToken(user);
 		});
 
 		return new MessageResponse(
-				"Если аккаунт с указанным email существует, письмо с подтверждением будет отправлено.");
+				"If an account with this email exists, a verification email will be sent.");
 	}
 
 	/**
@@ -213,12 +213,12 @@ public class AuthService {
 	public AuthTokensResponse login(LoginRequest request) {
 		String email = request.email().trim().toLowerCase(Locale.ROOT);
 		User user = userRepository.findByEmailIgnoreCase(email)
-				.orElseThrow(() -> new UnauthorizedException("Неверный email или пароль"));
+				.orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
 		if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-			throw new UnauthorizedException("Неверный email или пароль");
+			throw new UnauthorizedException("Invalid email or password");
 		}
 		if (user.getStatus() != UserStatus.ACTIVE || !user.isEmailVerified()) {
-			throw new ForbiddenException("Учётная запись неактивна или email не подтверждён");
+			throw new ForbiddenException("Account is inactive or email is not verified");
 		}
 		return authTokenService.issueTokens(user);
 	}
