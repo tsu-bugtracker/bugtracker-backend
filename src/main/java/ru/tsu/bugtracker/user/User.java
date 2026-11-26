@@ -58,7 +58,7 @@ public class User {
 	@Column(name = "updated_at", nullable = false)
 	private OffsetDateTime updatedAt;
 
-	protected User() {
+	public User() {
 	}
 
 	@PrePersist
