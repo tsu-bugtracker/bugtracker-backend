@@ -1,0 +1,64 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-seed-admin
+      author: bugtracker
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: 0
+            sql: "SELECT COUNT(*) FROM users WHERE email = 'admin@bugtracker.local'"
+      changes:
+        - insert:
+            tableName: users
+            columns:
+              - column:
+                  name: id
+                  value: '00000000-0000-0000-0000-000000000001'
+              - column:
+                  name: email
+                  value: 'admin@bugtracker.local'
+              - column:
+                  name: password_hash
+                  value: '$2a$10$C54Jlpu0UE4L4vO/v2v3c./m5PqUlSIbXPvx8n7OmuzyC.MLs3OLG'
+              - column:
+                  name: full_name
+                  value: 'System Administrator'
+              - column:
+                  name: is_admin
+                  valueBoolean: true
+              - column:
+                  name: email_verified
+                  valueBoolean: true
+              - column:
+                  name: status
+                  value: 'ACTIVE'
+              - column:
+                  name: can_create_projects
+                  valueBoolean: true
+              - column:
+                  name: created_at
+                  valueComputed: now()
+              - column:
+                  name: updated_at
+                  valueComputed: now()
+        - insert:
+            tableName: notification_settings
+            columns:
+              - column:
+                  name: id
+                  value: '00000000-0000-0000-0000-000000000002'
+              - column:
+                  name: user_id
+                  value: '00000000-0000-0000-0000-000000000001'
+              - column:
+                  name: in_app_enabled
+                  valueBoolean: true
+              - column:
+                  name: email_enabled
+                  valueBoolean: true
+              - column:
+                  name: events_json
+                  value: '{}'
+              - column:
+                  name: updated_at
+                  valueComputed: now()

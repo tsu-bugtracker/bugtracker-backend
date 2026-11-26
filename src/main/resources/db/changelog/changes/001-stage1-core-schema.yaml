@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-stage1-core-schema
+      author: bugtracker
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/001-stage1-core-schema.sql
+            relativeToChangelogFile: false
+            splitStatements: true
