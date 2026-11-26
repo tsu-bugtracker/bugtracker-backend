@@ -23,6 +23,8 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
     disable-swagger-default-url: true
+    operations-sorter: alpha
+    persist-authorization: true
     urls-primary-name: Current state
     urls:
       - name: Current state

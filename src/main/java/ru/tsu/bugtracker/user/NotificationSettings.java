@@ -40,7 +40,7 @@ public class NotificationSettings {
 	@Column(name = "updated_at", nullable = false)
 	private OffsetDateTime updatedAt;
 
-	protected NotificationSettings() {
+	public NotificationSettings() {
 	}
 
 	@PrePersist
