@@ -12,4 +12,10 @@ public interface ProjectInvitationRepository extends JpaRepository<ProjectInvita
 
 	List<ProjectInvitation> findAllByEmailIgnoreCaseAndStatus(String email, InvitationStatus status);
 
+	List<ProjectInvitation> findAllByProjectIdAndStatusOrderByCreatedAtDesc(UUID projectId, InvitationStatus status);
+
+	Optional<ProjectInvitation> findByIdAndProjectId(UUID id, UUID projectId);
+
+	boolean existsByProjectIdAndEmailIgnoreCaseAndStatus(UUID projectId, String email, InvitationStatus status);
+
 }
