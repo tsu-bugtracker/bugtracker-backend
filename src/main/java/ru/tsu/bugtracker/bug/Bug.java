@@ -23,6 +23,7 @@ import java.util.UUID;
 import ru.tsu.bugtracker.project.Label;
 import ru.tsu.bugtracker.project.Project;
 import ru.tsu.bugtracker.project.SoftwareComponent;
+import ru.tsu.bugtracker.release.Release;
 import ru.tsu.bugtracker.user.User;
 
 @Entity
@@ -90,6 +91,14 @@ public class Bug {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "component_id")
     private SoftwareComponent component;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "target_release_id")
+    private Release targetRelease;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "fixed_in_release_id")
+    private Release fixedInRelease;
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
@@ -249,6 +258,22 @@ public class Bug {
 
     public void setComponent(SoftwareComponent component) {
         this.component = component;
+    }
+
+    public Release getTargetRelease() {
+        return targetRelease;
+    }
+
+    public void setTargetRelease(Release targetRelease) {
+        this.targetRelease = targetRelease;
+    }
+
+    public Release getFixedInRelease() {
+        return fixedInRelease;
+    }
+
+    public void setFixedInRelease(Release fixedInRelease) {
+        this.fixedInRelease = fixedInRelease;
     }
 
     public Set<Label> getLabels() {

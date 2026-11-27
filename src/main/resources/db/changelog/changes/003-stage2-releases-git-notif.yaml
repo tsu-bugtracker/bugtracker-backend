@@ -1,0 +1,431 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-stage2-release-tables
+      author: bugtracker
+      changes:
+        - createTable:
+            tableName: releases
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+              - column:
+                  name: created_at
+                  type: TIMESTAMP(6) WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+              - column:
+                  name: planned_date
+                  type: date
+              - column:
+                  name: release_notes
+                  type: TEXT
+              - column:
+                  name: released_at
+                  type: TIMESTAMP(6) WITH TIME ZONE
+              - column:
+                  name: status
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP(6) WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+        - createTable:
+            tableName: git_integrations
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+              - column:
+                  name: access_token
+                  type: VARCHAR(1024)
+              - column:
+                  name: connected
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP(6) WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: default_branch
+                  type: VARCHAR(255)
+              - column:
+                  name: last_synced_at
+                  type: TIMESTAMP(6) WITH TIME ZONE
+              - column:
+                  name: provider
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: repository_url
+                  type: VARCHAR(1024)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP(6) WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+        - createTable:
+            tableName: git_commits
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+              - column:
+                  name: author_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: branch
+                  type: VARCHAR(255)
+              - column:
+                  name: commit_hash
+                  type: VARCHAR(128)
+              - column:
+                  name: committed_at
+                  type: TIMESTAMP(6) WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP(6) WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: merge_request_url
+                  type: VARCHAR(1024)
+              - column:
+                  name: title
+                  type: VARCHAR(500)
+              - column:
+                  name: type
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: project_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+        - createTable:
+            tableName: bug_linked_commits
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+              - column:
+                  name: author_name
+                  type: VARCHAR(255)
+              - column:
+                  name: commit_hash
+                  type: VARCHAR(128)
+              - column:
+                  name: committed_at
+                  type: TIMESTAMP(6) WITH TIME ZONE
+              - column:
+                  name: linked_at
+                  type: TIMESTAMP(6) WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: merge_request_url
+                  type: VARCHAR(1024)
+              - column:
+                  name: type
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: bug_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: linked_by_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+        - createTable:
+            tableName: notifications
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+              - column:
+                  name: created_at
+                  type: TIMESTAMP(6) WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: event_type
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: message
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_read
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+              - column:
+                  name: title
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: bug_id
+                  type: UUID
+              - column:
+                  name: project_id
+                  type: UUID
+              - column:
+                  name: recipient_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+        - createTable:
+            tableName: subscriptions
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+              - column:
+                  name: created_at
+                  type: TIMESTAMP(6) WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: target_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: target_type
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 003-stage2-release-columns
+      author: bugtracker
+      changes:
+        - addColumn:
+            tableName: bugs
+            columns:
+              - column:
+                  name: target_release_id
+                  type: UUID
+        - addColumn:
+            tableName: bugs
+            columns:
+              - column:
+                  name: fixed_in_release_id
+                  type: UUID
+        - addColumn:
+            tableName: fix_plans
+            columns:
+              - column:
+                  name: target_release_id
+                  type: UUID
+
+  - changeSet:
+      id: 003-stage2-unique-constraints
+      author: bugtracker
+      changes:
+        - addUniqueConstraint:
+            tableName: git_integrations
+            columnNames: project_id
+            constraintName: uq_git_integrations_project_id
+        - addUniqueConstraint:
+            tableName: releases
+            columnNames: project_id, version
+            constraintName: uq_releases_project_version
+        - addUniqueConstraint:
+            tableName: subscriptions
+            columnNames: user_id, target_type, target_id
+            constraintName: uq_subscriptions_user_target
+
+  - changeSet:
+      id: 003-stage2-indexes
+      author: bugtracker
+      changes:
+        - createIndex:
+            tableName: bug_linked_commits
+            indexName: idx_bug_linked_commits_bug
+            columns:
+              - column:
+                  name: bug_id
+        - createIndex:
+            tableName: git_commits
+            indexName: idx_git_commits_project_committed
+            columns:
+              - column:
+                  name: project_id
+              - column:
+                  name: committed_at
+        - createIndex:
+            tableName: notifications
+            indexName: idx_notifications_recipient_read_created
+            columns:
+              - column:
+                  name: recipient_id
+              - column:
+                  name: is_read
+              - column:
+                  name: created_at
+
+  - changeSet:
+      id: 003-stage2-foreign-keys
+      author: bugtracker
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: releases
+            baseColumnNames: project_id
+            referencedTableName: projects
+            referencedColumnNames: id
+            constraintName: fk_releases_project
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: releases
+            baseColumnNames: created_by_id
+            referencedTableName: users
+            referencedColumnNames: id
+            constraintName: fk_releases_created_by
+        - addForeignKeyConstraint:
+            baseTableName: git_integrations
+            baseColumnNames: project_id
+            referencedTableName: projects
+            referencedColumnNames: id
+            constraintName: fk_git_integrations_project
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: git_commits
+            baseColumnNames: project_id
+            referencedTableName: projects
+            referencedColumnNames: id
+            constraintName: fk_git_commits_project
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: bug_linked_commits
+            baseColumnNames: bug_id
+            referencedTableName: bugs
+            referencedColumnNames: id
+            constraintName: fk_bug_linked_commits_bug
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: bug_linked_commits
+            baseColumnNames: linked_by_id
+            referencedTableName: users
+            referencedColumnNames: id
+            constraintName: fk_bug_linked_commits_linked_by
+        - addForeignKeyConstraint:
+            baseTableName: notifications
+            baseColumnNames: recipient_id
+            referencedTableName: users
+            referencedColumnNames: id
+            constraintName: fk_notifications_recipient
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: notifications
+            baseColumnNames: project_id
+            referencedTableName: projects
+            referencedColumnNames: id
+            constraintName: fk_notifications_project
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: notifications
+            baseColumnNames: bug_id
+            referencedTableName: bugs
+            referencedColumnNames: id
+            constraintName: fk_notifications_bug
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: subscriptions
+            baseColumnNames: user_id
+            referencedTableName: users
+            referencedColumnNames: id
+            constraintName: fk_subscriptions_user
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: bugs
+            baseColumnNames: target_release_id
+            referencedTableName: releases
+            referencedColumnNames: id
+            constraintName: fk_bugs_target_release
+            onDelete: SET NULL
+        - addForeignKeyConstraint:
+            baseTableName: bugs
+            baseColumnNames: fixed_in_release_id
+            referencedTableName: releases
+            referencedColumnNames: id
+            constraintName: fk_bugs_fixed_in_release
+            onDelete: SET NULL
+        - addForeignKeyConstraint:
+            baseTableName: fix_plans
+            baseColumnNames: target_release_id
+            referencedTableName: releases
+            referencedColumnNames: id
+            constraintName: fk_fix_plans_target_release
+            onDelete: SET NULL

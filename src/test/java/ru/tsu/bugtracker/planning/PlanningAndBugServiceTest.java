@@ -36,6 +36,7 @@ import ru.tsu.bugtracker.project.ProjectMemberRepository;
 import ru.tsu.bugtracker.project.ProjectRole;
 import ru.tsu.bugtracker.project.ProjectStatus;
 import ru.tsu.bugtracker.project.SoftwareComponentRepository;
+import ru.tsu.bugtracker.release.ReleaseRepository;
 import ru.tsu.bugtracker.user.User;
 
 @SuppressWarnings("unused")
@@ -69,6 +70,9 @@ class PlanningAndBugServiceTest {
 
 	@Mock
 	private ProjectMemberRepository projectMemberRepository;
+
+	@Mock
+	private ReleaseRepository releaseRepository;
 
 	@InjectMocks
 	private BugService bugService;

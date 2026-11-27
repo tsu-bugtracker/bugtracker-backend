@@ -1,6 +1,7 @@
 package ru.tsu.bugtracker.bug;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -17,8 +18,11 @@ import ru.tsu.bugtracker.bug.dto.VerifyDecision;
 import ru.tsu.bugtracker.common.exception.BadRequestException;
 import ru.tsu.bugtracker.common.exception.ConflictException;
 import ru.tsu.bugtracker.common.exception.ForbiddenException;
+import ru.tsu.bugtracker.common.exception.NotFoundException;
 import ru.tsu.bugtracker.project.ProjectAccessService;
 import ru.tsu.bugtracker.project.ProjectRole;
+import ru.tsu.bugtracker.release.Release;
+import ru.tsu.bugtracker.release.ReleaseRepository;
 import ru.tsu.bugtracker.user.User;
 
 /**
@@ -43,13 +47,17 @@ public class BugLifecycleService {
 
 	private final ProjectAccessService projectAccessService;
 
+	private final ReleaseRepository releaseRepository;
+
 	public BugLifecycleService(
 			BugSupportService bugSupportService,
 			BugRepository bugRepository,
-			ProjectAccessService projectAccessService) {
+			ProjectAccessService projectAccessService,
+			ReleaseRepository releaseRepository) {
 		this.bugSupportService = bugSupportService;
 		this.bugRepository = bugRepository;
 		this.projectAccessService = projectAccessService;
+		this.releaseRepository = releaseRepository;
 	}
 
 	/**
@@ -181,6 +189,19 @@ public class BugLifecycleService {
 		BugResolution oldResolution = bug.getResolution();
 
 		if (req.decision() == VerifyDecision.CONFIRM) {
+			if (req.fixedInReleaseId() != null) {
+				Release fixedRelease = this.releaseRepository
+					.findByIdAndProjectId(req.fixedInReleaseId(), projectId)
+					.orElseThrow(() -> new NotFoundException("Release not found in project"));
+				String oldFixedVersion = bug.getFixedInRelease() == null
+						? null : bug.getFixedInRelease().getVersion();
+				bug.setFixedInRelease(fixedRelease);
+				if (!Objects.equals(oldFixedVersion, fixedRelease.getVersion())) {
+					this.bugSupportService.recordHistory(bug, actor, "fixedInRelease",
+							oldFixedVersion, fixedRelease.getVersion());
+				}
+			}
+
 			bug.setStatus(BugStatus.CLOSED);
 			bug.setResolution(BugResolution.FIXED);
 			bug.setClosedAt(Instant.now());
@@ -267,9 +288,17 @@ public class BugLifecycleService {
 
 		BugResolution oldResolution = bug.getResolution();
 
+		String oldFixedVersion = bug.getFixedInRelease() == null
+				? null : bug.getFixedInRelease().getVersion();
+		bug.setFixedInRelease(null);
+
 		bug.setStatus(BugStatus.REOPENED);
 		bug.setResolution(null);
 		bug.setClosedAt(null);
+
+		if (oldFixedVersion != null) {
+			this.bugSupportService.recordHistory(bug, actor, "fixedInRelease", oldFixedVersion, null);
+		}
 
 		this.bugSupportService.recordHistory(bug, actor, STATUS_FIELD,
 				BugStatus.CLOSED.name(), BugStatus.REOPENED.name());

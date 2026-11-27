@@ -18,6 +18,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 import ru.tsu.bugtracker.bug.Bug;
 import ru.tsu.bugtracker.bug.BugPriority;
+import ru.tsu.bugtracker.release.Release;
 import ru.tsu.bugtracker.user.User;
 
 @Entity
@@ -48,6 +49,10 @@ public class FixPlan {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "planned_by_id", nullable = false)
     private User plannedBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "target_release_id")
+    private Release targetRelease;
 
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
@@ -116,6 +121,14 @@ public class FixPlan {
 
     public void setPlannedBy(User plannedBy) {
         this.plannedBy = plannedBy;
+    }
+
+    public Release getTargetRelease() {
+        return targetRelease;
+    }
+
+    public void setTargetRelease(Release targetRelease) {
+        this.targetRelease = targetRelease;
     }
 
     public OffsetDateTime getUpdatedAt() {
