@@ -13,6 +13,8 @@ import ru.tsu.bugtracker.bug.dto.BugLinkDto;
 import ru.tsu.bugtracker.bug.dto.BugSummaryDto;
 import ru.tsu.bugtracker.common.dto.UserShortDto;
 import ru.tsu.bugtracker.common.exception.NotFoundException;
+import ru.tsu.bugtracker.git.BugLinkedCommitRepository;
+import ru.tsu.bugtracker.git.dto.LinkedCommitDto;
 import ru.tsu.bugtracker.planning.FixPlanRepository;
 import ru.tsu.bugtracker.planning.dto.FixPlanDto;
 import ru.tsu.bugtracker.project.dto.LabelDto;
@@ -35,6 +37,7 @@ public class BugSupportService {
 	private final CommentRepository commentRepository;
 	private final AttachmentRepository attachmentRepository;
 	private final FixPlanRepository fixPlanRepository;
+	private final BugLinkedCommitRepository bugLinkedCommitRepository;
 	private final UserRepository userRepository;
 
 	public BugSupportService(
@@ -44,6 +47,7 @@ public class BugSupportService {
 			CommentRepository commentRepository,
 			AttachmentRepository attachmentRepository,
 			FixPlanRepository fixPlanRepository,
+			BugLinkedCommitRepository bugLinkedCommitRepository,
 			UserRepository userRepository) {
 		this.bugRepository = bugRepository;
 		this.bugHistoryRepository = bugHistoryRepository;
@@ -51,6 +55,7 @@ public class BugSupportService {
 		this.commentRepository = commentRepository;
 		this.attachmentRepository = attachmentRepository;
 		this.fixPlanRepository = fixPlanRepository;
+		this.bugLinkedCommitRepository = bugLinkedCommitRepository;
 		this.userRepository = userRepository;
 	}
 
@@ -124,6 +129,11 @@ public class BugSupportService {
 				.stream()
 				.map(BugLinkDto::from)
 				.toList();
+		List<LinkedCommitDto> commits = this.bugLinkedCommitRepository
+				.findAllByBugIdOrderByLinkedAtDesc(bug.getId())
+				.stream()
+				.map(LinkedCommitDto::from)
+				.toList();
 		long commentsCount = commentRepository.countByBugId(bug.getId());
 		long attachmentsCount = attachmentRepository.countByBugId(bug.getId());
 
@@ -148,7 +158,7 @@ public class BugSupportService {
 				fixPlan,
 				ReleaseShortDto.from(bug.getTargetRelease()),
 				ReleaseShortDto.from(bug.getFixedInRelease()),
-				List.of(),
+				commits,
 				links,
 				commentsCount,
 				attachmentsCount,

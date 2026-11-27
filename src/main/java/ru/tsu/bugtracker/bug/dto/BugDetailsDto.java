@@ -8,6 +8,7 @@ import ru.tsu.bugtracker.bug.BugPriority;
 import ru.tsu.bugtracker.bug.BugResolution;
 import ru.tsu.bugtracker.bug.BugStatus;
 import ru.tsu.bugtracker.common.dto.UserShortDto;
+import ru.tsu.bugtracker.git.dto.LinkedCommitDto;
 import ru.tsu.bugtracker.planning.dto.FixPlanDto;
 import ru.tsu.bugtracker.project.dto.LabelDto;
 import ru.tsu.bugtracker.project.dto.SoftwareComponentDto;
@@ -36,7 +37,7 @@ import ru.tsu.bugtracker.release.dto.ReleaseShortDto;
  * @param fixPlan             planning details for the bug
  * @param targetRelease       release the bug is planned for
  * @param fixedInRelease      release that contains the fix
- * @param commits             commits linked to the fix; reserved
+ * @param commits             commits and merge requests linked to the fix
  * @param links               links to other bugs
  * @param commentsCount       number of comments
  * @param attachmentsCount    number of attachments
@@ -66,7 +67,7 @@ public record BugDetailsDto(
 		FixPlanDto fixPlan,
 		ReleaseShortDto targetRelease,
 		ReleaseShortDto fixedInRelease,
-		List<Object> commits,
+		List<LinkedCommitDto> commits,
 		List<BugLinkDto> links,
 		long commentsCount,
 		long attachmentsCount,

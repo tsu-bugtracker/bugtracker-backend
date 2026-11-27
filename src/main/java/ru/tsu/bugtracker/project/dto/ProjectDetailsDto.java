@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import ru.tsu.bugtracker.common.dto.UserShortDto;
+import ru.tsu.bugtracker.git.dto.GitIntegrationResponse;
 import ru.tsu.bugtracker.project.ProjectRole;
 import ru.tsu.bugtracker.project.ProjectStatus;
 
@@ -20,7 +21,7 @@ import ru.tsu.bugtracker.project.ProjectStatus;
  * @param hasActiveTester    whether the project has an active tester
  * @param owner              project owner
  * @param myRole             role of the current user in the project
- * @param gitIntegration     Git integration details; {@code null} at this stage
+ * @param gitIntegration     connected Git integration details; {@code null} when absent
  * @param startDate          planned start date
  * @param endDate            planned end date
  * @param membersCount       number of project members
@@ -37,7 +38,7 @@ public record ProjectDetailsDto(
 		boolean hasActiveTester,
 		UserShortDto owner,
 		ProjectRole myRole,
-		Object gitIntegration,
+		GitIntegrationResponse gitIntegration,
 		LocalDate startDate,
 		LocalDate endDate,
 		long membersCount,

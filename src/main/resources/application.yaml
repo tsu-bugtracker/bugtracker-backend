@@ -44,3 +44,7 @@ app:
   frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+  git:
+    mode: ${APP_GIT_MODE:live}
+    github-api-url: ${APP_GIT_GITHUB_API_URL:https://api.github.com}
+    gitlab-api-url: ${APP_GIT_GITLAB_API_URL:https://gitlab.com/api/v4}

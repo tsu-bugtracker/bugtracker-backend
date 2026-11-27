@@ -1,0 +1,12 @@
+package ru.tsu.bugtracker.git;
+
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface GitIntegrationRepository extends JpaRepository<GitIntegration, UUID> {
+
+	Optional<GitIntegration> findByProjectId(UUID projectId);
+
+}

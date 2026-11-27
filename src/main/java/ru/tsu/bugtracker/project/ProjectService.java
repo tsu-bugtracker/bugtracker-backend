@@ -25,6 +25,7 @@ import ru.tsu.bugtracker.common.exception.BadRequestException;
 import ru.tsu.bugtracker.common.exception.ConflictException;
 import ru.tsu.bugtracker.common.exception.ForbiddenException;
 import ru.tsu.bugtracker.common.exception.NotFoundException;
+import ru.tsu.bugtracker.git.GitIntegrationService;
 import ru.tsu.bugtracker.project.dto.CreateProjectRequest;
 import ru.tsu.bugtracker.project.dto.ProjectDetailsDto;
 import ru.tsu.bugtracker.project.dto.ProjectSummaryDto;
@@ -68,18 +69,22 @@ public class ProjectService {
 
 	private final AuditService auditService;
 
+	private final GitIntegrationService gitIntegrationService;
+
 	public ProjectService(ProjectRepository projectRepository,
 			ProjectMemberRepository projectMemberRepository,
 			ProjectAccessService projectAccessService,
 			BugRepository bugRepository,
 			UserRepository userRepository,
-			AuditService auditService) {
+			AuditService auditService,
+			GitIntegrationService gitIntegrationService) {
 		this.projectRepository = projectRepository;
 		this.projectMemberRepository = projectMemberRepository;
 		this.projectAccessService = projectAccessService;
 		this.bugRepository = bugRepository;
 		this.userRepository = userRepository;
 		this.auditService = auditService;
+		this.gitIntegrationService = gitIntegrationService;
 	}
 
 	/**
@@ -104,8 +109,16 @@ public class ProjectService {
 			roles.put(membership.getProject().getId(), membership.getRole());
 		}
 		List<UUID> projectIds = new ArrayList<>(roles.keySet());
+		Specification<Project> specification = buildListProjectsSpecification(projectIds, status, search);
 
-		Specification<Project> specification = (root, query, criteriaBuilder) -> {
+		Page<ProjectSummaryDto> page = this.projectRepository.findAll(specification, pageable)
+			.map(project -> toSummaryDto(project, roles.get(project.getId())));
+		return PagedResponse.from(page);
+	}
+
+	private Specification<Project> buildListProjectsSpecification(
+			List<UUID> projectIds, ProjectStatus status, String search) {
+		return (root, _, criteriaBuilder) -> {
 			List<Predicate> predicates = new ArrayList<>();
 			predicates.add(root.get("id").in(projectIds));
 			if (status != null) {
@@ -117,10 +130,6 @@ public class ProjectService {
 			}
 			return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
 		};
-
-		Page<ProjectSummaryDto> page = this.projectRepository.findAll(specification, pageable)
-			.map(project -> toSummaryDto(project, roles.get(project.getId())));
-		return PagedResponse.from(page);
 	}
 
 	/**
@@ -158,6 +167,10 @@ public class ProjectService {
 		member.setRole(ProjectRole.TEAM_LEAD);
 		member.setStatus(MemberStatus.ACTIVE);
 		this.projectMemberRepository.save(member);
+
+		if (request.gitRepositoryUrl() != null && !request.gitRepositoryUrl().isBlank()) {
+			this.gitIntegrationService.connectFromProjectCreation(project, request.gitRepositoryUrl());
+		}
 
 		this.auditService.log(user, PROJECT_CREATED_ACTION, PROJECT_TARGET_TYPE, project.getId(),
 				Map.of("name", project.getName()));
@@ -267,7 +280,7 @@ public class ProjectService {
 				this.projectAccessService.hasActiveTester(project.getId()),
 				UserShortDto.from(project.getOwner()),
 				myRole,
-				null,
+				this.gitIntegrationService.findConnectedByProjectId(project.getId()),
 				project.getStartDate(),
 				project.getEndDate(),
 				this.projectMemberRepository.countByProjectId(project.getId()),
