@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.tsu.bugtracker.bug.dto.BugDetailsDto;
 import ru.tsu.bugtracker.bug.dto.ClarifyBugRequest;
 import ru.tsu.bugtracker.bug.dto.CloseWithoutFixRequest;
+import ru.tsu.bugtracker.bug.dto.CommitReferenceInputDto;
 import ru.tsu.bugtracker.bug.dto.FixBugRequest;
 import ru.tsu.bugtracker.bug.dto.ReopenBugRequest;
 import ru.tsu.bugtracker.bug.dto.RequestClarificationRequest;
@@ -19,6 +20,7 @@ import ru.tsu.bugtracker.common.exception.BadRequestException;
 import ru.tsu.bugtracker.common.exception.ConflictException;
 import ru.tsu.bugtracker.common.exception.ForbiddenException;
 import ru.tsu.bugtracker.common.exception.NotFoundException;
+import ru.tsu.bugtracker.git.GitIntegrationService;
 import ru.tsu.bugtracker.project.ProjectAccessService;
 import ru.tsu.bugtracker.project.ProjectRole;
 import ru.tsu.bugtracker.release.Release;
@@ -49,15 +51,19 @@ public class BugLifecycleService {
 
 	private final ReleaseRepository releaseRepository;
 
+	private final GitIntegrationService gitIntegrationService;
+
 	public BugLifecycleService(
 			BugSupportService bugSupportService,
 			BugRepository bugRepository,
 			ProjectAccessService projectAccessService,
-			ReleaseRepository releaseRepository) {
+			ReleaseRepository releaseRepository,
+			GitIntegrationService gitIntegrationService) {
 		this.bugSupportService = bugSupportService;
 		this.bugRepository = bugRepository;
 		this.projectAccessService = projectAccessService;
 		this.releaseRepository = releaseRepository;
+		this.gitIntegrationService = gitIntegrationService;
 	}
 
 	/**
@@ -153,6 +159,13 @@ public class BugLifecycleService {
 
 		if (bug.getAssignee() != null && !bug.getAssignee().getId().equals(userId)) {
 			throw new ForbiddenException("Only the assigned developer can submit a fix");
+		}
+
+		if (req != null && req.commits() != null && !req.commits().isEmpty()) {
+			for (CommitReferenceInputDto commitRef : req.commits()) {
+				this.gitIntegrationService.verifyAndLinkCommit(
+						bug, actor, commitRef.commitHash(), commitRef.mergeRequestUrl(), false);
+			}
 		}
 
 		BugStatus oldStatus = bug.getStatus();
