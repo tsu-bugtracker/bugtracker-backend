@@ -27,4 +27,20 @@ public interface BugRepository extends JpaRepository<Bug, UUID>, JpaSpecificatio
 	@Query("update Bug b set b.component = null where b.component.id = :componentId")
 	int clearComponent(@Param("componentId") UUID componentId);
 
+	@Query("select count(b) from Bug b where b.targetRelease.id = :releaseId or b.fixedInRelease.id = :releaseId")
+	long countByReleaseId(@Param("releaseId") UUID releaseId);
+
+	@Query("select b from Bug b where b.targetRelease.id = :releaseId or b.fixedInRelease.id = :releaseId order by b.createdAt desc")
+	List<Bug> findAllByReleaseId(@Param("releaseId") UUID releaseId);
+
+	List<Bug> findAllByProjectIdAndIdIn(UUID projectId, Collection<UUID> ids);
+
+	@Modifying
+	@Query("update Bug b set b.targetRelease = null where b.targetRelease.id = :releaseId")
+	int clearTargetRelease(@Param("releaseId") UUID releaseId);
+
+	@Modifying
+	@Query("update Bug b set b.fixedInRelease = null where b.fixedInRelease.id = :releaseId")
+	int clearFixedInRelease(@Param("releaseId") UUID releaseId);
+
 }
