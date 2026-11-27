@@ -32,6 +32,7 @@ import ru.tsu.bugtracker.project.Project;
 import ru.tsu.bugtracker.project.ProjectAccessService;
 import ru.tsu.bugtracker.project.ProjectMember;
 import ru.tsu.bugtracker.project.ProjectRole;
+import ru.tsu.bugtracker.release.ReleaseRepository;
 import ru.tsu.bugtracker.user.User;
 
 @ExtendWith(MockitoExtension.class)
@@ -49,6 +50,9 @@ class BugLifecycleServiceTest {
 
 	@Mock
 	private ProjectAccessService projectAccessService;
+
+	@Mock
+	private ReleaseRepository releaseRepository;
 
 	@InjectMocks
 	private BugLifecycleService bugLifecycleService;

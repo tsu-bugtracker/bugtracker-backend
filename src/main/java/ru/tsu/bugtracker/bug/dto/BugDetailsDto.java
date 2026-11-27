@@ -11,6 +11,7 @@ import ru.tsu.bugtracker.common.dto.UserShortDto;
 import ru.tsu.bugtracker.planning.dto.FixPlanDto;
 import ru.tsu.bugtracker.project.dto.LabelDto;
 import ru.tsu.bugtracker.project.dto.SoftwareComponentDto;
+import ru.tsu.bugtracker.release.dto.ReleaseShortDto;
 
 /**
  * Full bug representation returned for a single bug.
@@ -33,8 +34,8 @@ import ru.tsu.bugtracker.project.dto.SoftwareComponentDto;
  * @param component           affected software component
  * @param labels              labels attached to the bug
  * @param fixPlan             planning details for the bug
- * @param targetRelease       release the bug is planned for; reserved
- * @param fixedInRelease      release that contains the fix; reserved
+ * @param targetRelease       release the bug is planned for
+ * @param fixedInRelease      release that contains the fix
  * @param commits             commits linked to the fix; reserved
  * @param links               links to other bugs
  * @param commentsCount       number of comments
@@ -63,8 +64,8 @@ public record BugDetailsDto(
 		SoftwareComponentDto component,
 		List<LabelDto> labels,
 		FixPlanDto fixPlan,
-		Object targetRelease,
-		Object fixedInRelease,
+		ReleaseShortDto targetRelease,
+		ReleaseShortDto fixedInRelease,
 		List<Object> commits,
 		List<BugLinkDto> links,
 		long commentsCount,

@@ -6,6 +6,7 @@ import java.util.UUID;
 import ru.tsu.bugtracker.bug.BugPriority;
 import ru.tsu.bugtracker.common.dto.UserShortDto;
 import ru.tsu.bugtracker.planning.FixPlan;
+import ru.tsu.bugtracker.release.dto.ReleaseShortDto;
 
 /**
  * Representation of a bug fix plan.
@@ -15,7 +16,7 @@ import ru.tsu.bugtracker.planning.FixPlan;
  * @param priorityChangeReason reason for changing the priority
  * @param deadline             planned fix deadline
  * @param rationale            justification for the plan
- * @param targetRelease        release the fix is planned for; reserved
+ * @param targetRelease        release the fix is planned for
  * @param plannedBy            user who created the plan
  * @param updatedAt            last update timestamp
  */
@@ -25,7 +26,7 @@ public record FixPlanDto(
 		String priorityChangeReason,
 		OffsetDateTime deadline,
 		String rationale,
-		Object targetRelease,
+		ReleaseShortDto targetRelease,
 		UserShortDto plannedBy,
 		OffsetDateTime updatedAt
 ) {
@@ -37,7 +38,7 @@ public record FixPlanDto(
 				plan.getPriorityChangeReason(),
 				plan.getDeadline(),
 				plan.getRationale(),
-				null,
+				ReleaseShortDto.from(plan.getTargetRelease()),
 				plan.getPlannedBy() != null ? UserShortDto.from(plan.getPlannedBy()) : null,
 				plan.getUpdatedAt()
 		);

@@ -17,6 +17,7 @@ import ru.tsu.bugtracker.planning.FixPlanRepository;
 import ru.tsu.bugtracker.planning.dto.FixPlanDto;
 import ru.tsu.bugtracker.project.dto.LabelDto;
 import ru.tsu.bugtracker.project.dto.SoftwareComponentDto;
+import ru.tsu.bugtracker.release.dto.ReleaseShortDto;
 import ru.tsu.bugtracker.user.User;
 import ru.tsu.bugtracker.user.UserRepository;
 
@@ -107,7 +108,7 @@ public class BugSupportService {
 				bug.getAssignee() == null ? null : UserShortDto.from(bug.getAssignee()),
 				bug.getComponent() == null ? null : SoftwareComponentDto.from(bug.getComponent()),
 				bug.getLabels().stream().map(LabelDto::from).toList(),
-				null,
+				ReleaseShortDto.from(bug.getTargetRelease()),
 				bug.getDeadline(),
 				isOverdue(bug),
 				bug.getCreatedAt(),
@@ -145,8 +146,8 @@ public class BugSupportService {
 				bug.getComponent() == null ? null : SoftwareComponentDto.from(bug.getComponent()),
 				bug.getLabels().stream().map(LabelDto::from).toList(),
 				fixPlan,
-				null,
-				null,
+				ReleaseShortDto.from(bug.getTargetRelease()),
+				ReleaseShortDto.from(bug.getFixedInRelease()),
 				List.of(),
 				links,
 				commentsCount,

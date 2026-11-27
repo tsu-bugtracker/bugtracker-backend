@@ -29,12 +29,16 @@ import ru.tsu.bugtracker.bug.dto.BugSummaryDto;
 import ru.tsu.bugtracker.common.dto.PagedResponse;
 import ru.tsu.bugtracker.common.exception.BadRequestException;
 import ru.tsu.bugtracker.common.exception.ConflictException;
+import ru.tsu.bugtracker.common.exception.NotFoundException;
 import ru.tsu.bugtracker.planning.dto.AssignBugRequest;
 import ru.tsu.bugtracker.planning.dto.FixPlanRequest;
 import ru.tsu.bugtracker.project.ProjectAccessService;
 import ru.tsu.bugtracker.project.ProjectMember;
 import ru.tsu.bugtracker.project.ProjectMemberRepository;
 import ru.tsu.bugtracker.project.ProjectRole;
+import ru.tsu.bugtracker.release.Release;
+import ru.tsu.bugtracker.release.ReleaseRepository;
+import ru.tsu.bugtracker.release.ReleaseStatus;
 import ru.tsu.bugtracker.user.User;
 
 /**
@@ -83,17 +87,21 @@ public class PlanningService {
 
 	private final ProjectMemberRepository projectMemberRepository;
 
+	private final ReleaseRepository releaseRepository;
+
 	public PlanningService(
 			FixPlanRepository fixPlanRepository,
 			BugRepository bugRepository,
 			BugSupportService bugSupportService,
 			ProjectAccessService projectAccessService,
-			ProjectMemberRepository projectMemberRepository) {
+			ProjectMemberRepository projectMemberRepository,
+			ReleaseRepository releaseRepository) {
 		this.fixPlanRepository = fixPlanRepository;
 		this.bugRepository = bugRepository;
 		this.bugSupportService = bugSupportService;
 		this.projectAccessService = projectAccessService;
 		this.projectMemberRepository = projectMemberRepository;
+		this.releaseRepository = releaseRepository;
 	}
 
 	/**
@@ -121,6 +129,16 @@ public class PlanningService {
 
 		User actor = this.bugSupportService.requireUser(userId);
 
+		Release targetRelease = null;
+		if (req.targetReleaseId() != null) {
+			targetRelease = this.releaseRepository
+				.findByIdAndProjectId(req.targetReleaseId(), projectId)
+				.orElseThrow(() -> new NotFoundException("Release not found in project"));
+			if (targetRelease.getStatus() != ReleaseStatus.PLANNED) {
+				throw new ConflictException("Target release must be in PLANNED status");
+			}
+		}
+
 		FixPlan plan = this.fixPlanRepository.findByBugId(bugId).orElseGet(FixPlan::new);
 		plan.setBug(bug);
 		plan.setPriority(req.priority());
@@ -128,6 +146,7 @@ public class PlanningService {
 		plan.setDeadline(req.deadline());
 		plan.setRationale(req.rationale().trim());
 		plan.setPlannedBy(actor);
+		plan.setTargetRelease(targetRelease);
 		this.fixPlanRepository.save(plan);
 
 		BugPriority previousPriority = bug.getPriority();
@@ -144,6 +163,17 @@ public class PlanningService {
 			this.bugSupportService.recordHistory(bug, actor, "deadline",
 					previousDeadline == null ? null : previousDeadline.toString(),
 					newDeadline == null ? null : newDeadline.toString());
+		}
+
+		String prevReleaseVersion = bug.getTargetRelease() == null
+				? null : bug.getTargetRelease().getVersion();
+		String newReleaseVersion = targetRelease == null ? null : targetRelease.getVersion();
+		UUID prevReleaseId = bug.getTargetRelease() == null ? null : bug.getTargetRelease().getId();
+		UUID newReleaseId = targetRelease == null ? null : targetRelease.getId();
+		bug.setTargetRelease(targetRelease);
+		if (!Objects.equals(prevReleaseId, newReleaseId)) {
+			this.bugSupportService.recordHistory(bug, actor, "targetRelease",
+					prevReleaseVersion, newReleaseVersion);
 		}
 
 		if (req.assigneeId() != null) {

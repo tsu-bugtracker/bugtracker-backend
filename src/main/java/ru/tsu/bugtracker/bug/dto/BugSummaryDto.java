@@ -10,6 +10,7 @@ import ru.tsu.bugtracker.bug.BugStatus;
 import ru.tsu.bugtracker.common.dto.UserShortDto;
 import ru.tsu.bugtracker.project.dto.LabelDto;
 import ru.tsu.bugtracker.project.dto.SoftwareComponentDto;
+import ru.tsu.bugtracker.release.dto.ReleaseShortDto;
 
 /**
  * Compact bug representation used in lists and search results.
@@ -26,7 +27,7 @@ import ru.tsu.bugtracker.project.dto.SoftwareComponentDto;
  * @param assignee            user currently assigned to the bug
  * @param component           affected software component
  * @param labels              labels attached to the bug
- * @param targetRelease       release the bug is planned for; reserved
+ * @param targetRelease       release the bug is planned for
  * @param deadline            planned fix deadline
  * @param overdue             whether the deadline has passed
  * @param createdAt           creation timestamp
@@ -45,7 +46,7 @@ public record BugSummaryDto(
 		UserShortDto assignee,
 		SoftwareComponentDto component,
 		List<LabelDto> labels,
-		Object targetRelease,
+		ReleaseShortDto targetRelease,
 		Instant deadline,
 		boolean overdue,
 		Instant createdAt,
