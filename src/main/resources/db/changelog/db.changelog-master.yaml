@@ -3,3 +3,5 @@ databaseChangeLog:
       file: db/changelog/changes/001-stage1-core-schema.yaml
   - include:
       file: db/changelog/changes/002-seed-admin.yaml
+  - include:
+      file: db/changelog/changes/003-stage2-releases-git-notif.yaml
